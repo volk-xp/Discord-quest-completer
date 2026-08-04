@@ -26,7 +26,7 @@ function launchGame() {
       <p v-if="description" class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ description }}</p>
       <button 
         @click="launchGame" 
-        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded transition-colors"
+        class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded transition-colors"
       >
         Launch
       </button>

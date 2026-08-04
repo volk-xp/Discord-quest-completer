@@ -27,8 +27,8 @@
                     <button class="text-white rounded-md px-3 py-1"
                     :class="[
                         {
-                            'bg-blue-500 hover:bg-blue-600': !gameActions?.isExecutableRunning(executable),
-                            'bg-red-500 hover:bg-red-600': gameActions?.isExecutableRunning(executable),
+                            'bg-amber-600 hover:bg-amber-700': !gameActions?.isExecutableRunning(executable),
+                            'bg-red-600 hover:bg-red-700': gameActions?.isExecutableRunning(executable),
                         },
                     ]"
                         @click="handleLaunch(executable)"

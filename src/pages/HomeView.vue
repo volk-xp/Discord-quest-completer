@@ -387,8 +387,8 @@ provide<GameActionsProvider>(GameActionsKey, {
 <template>
     <div class="container mx-auto px-4 py-8">
         <!-- Center dialog -->
-        <dialog id="dialog" class="dialogStyle inset-0 bg-gray-800 bg-opacity-50
-        border border-gray-300 dark:border-gray-600 rounded-lg
+        <dialog id="dialog" class="dialogStyle inset-0 bg-white dark:bg-neutral-900 bg-opacity-50
+        border border-red-300 dark:border-red-900 rounded-lg
         transition-opacity duration-300 ease-in-out z-50
         "
         style="left: 50%; top: 50%; transform: translate(-50%, -50%)"
@@ -418,8 +418,8 @@ provide<GameActionsProvider>(GameActionsKey, {
                     <button
                     
                     class="
-                text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 
-                border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-1"
+                text-gray-500 dark:text-red-300/80 hover:text-gray-700 dark:hover:text-red-200 
+                border border-gray-300 dark:border-red-800 rounded-lg px-4 py-1"
                 @click="hideDialog()">
                     <span  v-if="dialogKey == 'rpc_message_1'">
                         Cancel 
@@ -429,17 +429,41 @@ provide<GameActionsProvider>(GameActionsKey, {
                 
                 <button 
                 v-if="dialogKey === 'rpc_message_1'"
-                class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 
-                border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-1"
+                class="text-gray-500 dark:text-red-300/80 hover:text-gray-700 dark:hover:text-red-200 
+                border border-gray-300 dark:border-red-800 rounded-lg px-4 py-1"
                 @click="continueRPCRisk(selectedGame)">
                     Accept risk and continue
                 </button>
                 </div>
             </div>
         </dialog>
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 text-center">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">
             Credits: Volk.xp
         </h1>
+
+        <div class="flex justify-center mb-6">
+            <span class="text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-900 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full" :class="isConnectedToRPC ? 'bg-green-500' : 'bg-red-500'"></span>
+                {{ isConnectedToRPC ? 'Connected' : 'Idle' }}
+            </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mb-6 max-w-2xl mx-auto">
+            <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-red-900/50 rounded-lg p-3 text-center">
+                <div class="text-xs text-gray-500 dark:text-red-300/70">Games tracked</div>
+                <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ gameList.length }}</div>
+            </div>
+            <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-red-900/50 rounded-lg p-3 text-center">
+                <div class="text-xs text-gray-500 dark:text-red-300/70">Verified games</div>
+                <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ gameDB.length }}</div>
+            </div>
+            <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-red-900/50 rounded-lg p-3 text-center">
+                <div class="text-xs text-gray-500 dark:text-red-300/70">RPC status</div>
+                <div class="text-lg font-semibold" :class="isConnectedToRPC ? 'text-green-500' : 'text-red-500'">
+                    {{ isConnectedToRPC ? 'Live' : 'Off' }}
+                </div>
+            </div>
+        </div>
 
         <!-- refetch game list fetch status. will appear on top left -->
         <Transition 
@@ -518,23 +542,23 @@ provide<GameActionsProvider>(GameActionsKey, {
             <div class="relative" ref="searchResultContainerRef">
                <div>
                  <input v-model="searchQuery" type="text" placeholder="Search Discord Verified games..."
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                    class="w-full px-4 py-2 border border-red-200 dark:border-red-900 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:bg-neutral-900 dark:text-white"
                     @focus="openSearchResults" @blur="handleSearchBlur" />
 
                 <!-- buttons to refetch game list -->
                 <button
                     @click="fetchGameList()"
-                    class="absolute right-0 top-1/2 transform -translate-y-1/2 px-3 mr-2 py-1 text-sm bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-white rounded-md">
+                    class="absolute right-0 top-1/2 transform -translate-y-1/2 px-3 mr-2 py-1 text-sm bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-800/70 text-red-700 dark:text-red-200 rounded-md border border-red-200 dark:border-red-800">
                     <span class="wrap whitespace-nowrap text-xs">
                         Refetch Game List
                     </span>
                 </button>   
                </div>
                 <div v-if="searchResultsIsOpen" @click="isOnSearchResults = true"
-                    class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    class="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-900 border border-red-200 dark:border-red-900 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     <div v-if="searchResults.length > 0">
                         <div v-for="game in searchResults" :key="game.item.id"
-                            class="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                            class="p-3 hover:bg-red-50 dark:hover:bg-red-950/40 border-b border-red-100 dark:border-red-900/50 last:border-b-0">
                             <div class="flex justify-between items-center">
                                 <div>
                                     <div class="font-medium text-gray-800 dark:text-white">
@@ -554,7 +578,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                                     </div>
                                 </div>
                                 <button @click="addGameToList(game.item)"
-                                    class="ml-2 px-3 py-1 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-md">
+                                    class="ml-2 px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md">
                                     Add game to list
                                 </button>
                             </div>
@@ -562,7 +586,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                     </div>
                     <!-- Some help -->
                     <div v-if="searchResults.length === 0"
-                        class="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 last:border-b-0 text-gray-500 dark:text-gray-400">
+                        class="p-3 hover:bg-red-50 dark:hover:bg-red-950/40 border-b border-red-100 dark:border-red-900/50 last:border-b-0 text-gray-500 dark:text-gray-400">
                         Search for games by name. <br>
                         Click "Add game to list" to add them to your selected games.
                     </div>
@@ -574,21 +598,21 @@ provide<GameActionsProvider>(GameActionsKey, {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
             <!-- Left Column: Selected Games (scrollable) -->
             <!--  max-h-[70vh] overflow-y-auto : add these somewhere to just scroll the content  -->
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+            <div class="bg-white dark:bg-neutral-900 p-4 rounded-lg shadow border border-transparent dark:border-red-900/40 dark:shadow-[0_0_20px_-8px_rgba(239,68,68,0.25)]">
                 <h2
-                    class="text-xl font-bold text-gray-900 dark:text-white mb-4 sticky top-0 bg-white dark:bg-gray-800 py-2 z-10">
+                    class="text-xl font-bold text-gray-900 dark:text-white mb-4 sticky top-0 bg-white dark:bg-neutral-900 py-2 z-10">
                     Games</h2>
                 <div v-if="gameList.length === 0" class="text-gray-500 dark:text-gray-400 text-center py-8">
                     No games selected. Search and add games from the search bar.
                 </div>
                 <div v-else class="space-y-4">
                     <div v-for="game in gameList" :key="game.id" 
-                        class="p-3 border border-gray-200 dark:border-gray-700 rounded-lg
-                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors 
+                        class="p-3 border border-gray-200 dark:border-red-900/30 rounded-lg
+                        hover:bg-gray-100 dark:hover:bg-red-950/30 transition-colors 
                         duration-200 ease-in-out" 
                         :class="[
                             {
-                                'ring-1 ring-violet-500/40 shadow-[0px_0px_8px_2px_#8e51ff50] bg-gray-100 dark:bg-gray-700/40': selectedGame?.uid === game.uid,
+                                'ring-1 ring-red-500/40 shadow-[0px_0px_8px_2px_#ff444450] bg-gray-100 dark:bg-gray-700/40': selectedGame?.uid === game.uid,
                             }
                         ]" @click="selectGame(game)"
                     >
@@ -598,7 +622,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                                 <div class="relative inline-flex items-center">
                                     <div class="w-2 h-2 bg-white absolute rounded-full" style="left: 50%; top: 50%; transform: translate(-50%, -50%)"></div>
                                     <div class="relative inline-block">
-                                     <IconVerified class="w-5 h-5 text-indigo-500 dark:text-indigo-400"></IconVerified>
+                                     <IconVerified class="w-5 h-5 text-red-500 dark:text-red-400"></IconVerified>
                                     </div>
                                 </div>
                             </div>
@@ -618,7 +642,7 @@ provide<GameActionsProvider>(GameActionsKey, {
             </div>
 
             <!-- Right Column: Game Actions (fixed position) -->
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow md:sticky md:top-4 self-start" :key="forceRerenderKey">
+            <div class="bg-white dark:bg-neutral-900 p-4 rounded-lg shadow border border-transparent dark:border-red-900/40 dark:shadow-[0_0_20px_-8px_rgba(239,68,68,0.25)] md:sticky md:top-4 self-start" :key="forceRerenderKey">
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Game Actions</h2>
                 <div class="space-y-4">
                     <div class="text-gray-500 dark:text-gray-400 mb-2 text-sm" v-if="!selectedGame || selectedGame === null">
@@ -637,21 +661,21 @@ provide<GameActionsProvider>(GameActionsKey, {
                         </ul>
                     </div>
                     <button @click="handleTestRPC(selectedGame)"
-                        class="w-full py-2 rounded-lg bg-gray-600 hover:bg-gray-700 text-white">
+                        class="w-full py-2 rounded-lg bg-red-700 hover:bg-red-800 text-white">
                         {{ isConnecting || isConnectedToRPC ? 'Disconnect to Discord Gateway' : 'Test RPC' }}
                     </button>
 
                     <!-- <button :disabled="!canCreateDummyGame(selectedGame)" @click="createDummyGame(selectedGame)" class="w-full py-2 rounded-lg"
                         :class="[
                             canCreateDummyGame(selectedGame)
-                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                : 'bg-indigo-400 cursor-not-allowed text-gray-200'
+                                ? 'bg-red-600 hover:bg-red-700 text-white'
+                                : 'bg-red-400 cursor-not-allowed text-gray-200'
                         ]">
                         Create Dummy Game
                     </button> -->
 
                     <!-- divider -->
-                    <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+                    <div class="border-t border-gray-200 dark:border-red-900/40 my-4"></div>
 
                     <GameExecutables v-if="selectedGame" :game="selectedGame" 
                         @play="playGame"
@@ -679,9 +703,9 @@ provide<GameActionsProvider>(GameActionsKey, {
                 </div>
 
                 <!-- Divider -->
-                <div class="border-t border-gray-200 dark:border-gray-700 my-5"></div>
+                <div class="border-t border-gray-200 dark:border-red-900/40 my-5"></div>
 
-                <div class="mt-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div class="mt-6 p-4 border border-gray-200 dark:border-red-900/40 dark:bg-red-950/10 rounded-lg">
                     <h3 class="font-medium text-gray-800 dark:text-white mb-2">Status</h3>
                     <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">
                         Check Discord to see if it displays that you are playing a game.
