@@ -26,6 +26,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: compute version
+        id: version
+        shell: bash
+        run: |
+          version=$(date +"%Y.%m.%d")
+          echo "version=$version" >> $GITHUB_ENV
+          echo "$version" > version.txt
+
+      - name: patch tauri.conf.json version
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = 'src-tauri/tauri.conf.json';
+            const conf = JSON.parse(fs.readFileSync(path, 'utf8'));
+            conf.version = '${{ env.version }}';
+            fs.writeFileSync(path, JSON.stringify(conf, null, 2));
+          "
+
       - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
@@ -92,6 +111,8 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
       
@@ -105,25 +126,26 @@ jobs:
             src-tauri/target/release/bundle/
             src-tauri/target/release/data/
             src-tauri/target/release/resources/
+            version.txt
 
   release:
     needs: build-tauri
     runs-on: ubuntu-latest
     steps:
-      - name: get version
-        id: extract_version
-        run: |
-          version=$(date +"%Y.%m.%d")
-          echo "version=$version" >> $GITHUB_ENV
-        shell: bash
-
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: tauri-win-release
           path: tauri-win-release
 
-      - name: prepare files
+      - name: read version
+        id: read_version
+        shell: bash
+        run: |
+          version=$(cat tauri-win-release/version.txt)
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: prepare portable zip
         env:
           version: ${{ env.version }}
           win_build_release_dir: discord-quest-completer-win32-x64-${{ env.version }}
@@ -134,6 +156,36 @@ jobs:
           cp -r tauri-win-release/resources/ ./build/${{ env.win_build_release_dir }}/
           zip -r ./build/${{ env.win_build_release_dir }}.zip ./build/${{ env.win_build_release_dir }}
           echo "win_build_release_dir=${{ env.win_build_release_dir }}" >> $GITHUB_ENV
+
+      - name: prepare updater artifacts
+        shell: bash
+        run: |
+          set -e
+          NSIS_EXE=$(find tauri-win-release/bundle/nsis -name "*.exe" | head -n1)
+          NSIS_SIG=$(find tauri-win-release/bundle/nsis -name "*.exe.sig" | head -n1)
+
+          if [ -z "$NSIS_EXE" ] || [ -z "$NSIS_SIG" ]; then
+            echo "Could not find signed NSIS installer or its .sig file. Check that signing secrets are set."
+            exit 1
+          fi
+
+          cp "$NSIS_EXE" ./build/discord-quest-completer-setup.exe
+          SIGNATURE=$(cat "$NSIS_SIG")
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          cat > ./build/latest.json <<EOF
+          {
+            "version": "${{ env.version }}",
+            "notes": "See the release page for details.",
+            "pub_date": "$PUB_DATE",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "$SIGNATURE",
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ env.version }}/discord-quest-completer-setup.exe"
+              }
+            }
+          }
+          EOF
 
       - name: Create Build Artifacts
         uses: actions/upload-artifact@v4
@@ -162,6 +214,8 @@ jobs:
           generate_release_notes: true
           files: |
             ./build/${{ env.win_build_release_dir }}.zip
+            ./build/discord-quest-completer-setup.exe
+            ./build/latest.json
           prerelease: true
           draft: true
         env:
