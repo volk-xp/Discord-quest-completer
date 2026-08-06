@@ -158,7 +158,7 @@ jobs:
         id: read_version
         shell: bash
         run: |
-          version=$(cat tauri-win-release/version.txt)
+          version=$(cat tauri-win-release/version.txt | tr -d '\r\n')
           echo "version=$version" >> $GITHUB_ENV
 
       - name: prepare portable zip
