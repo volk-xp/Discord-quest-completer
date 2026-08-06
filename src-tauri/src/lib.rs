@@ -4,6 +4,7 @@ use std::env;
 use std::path::Path;
 use std::sync::Mutex;
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Listener, Manager};
+use window_vibrancy::{apply_acrylic, apply_mica};
 
 mod rpc;
 mod runner;
@@ -217,6 +218,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             create_fake_game,
@@ -226,6 +229,21 @@ pub fn run() {
             fetch_gamelist_gh_mirror,
             fetch_gamelist_from_discord
         ])
+        .setup(|app| {
+            let window = app
+                .get_webview_window("main")
+                .expect("main window should exist");
+
+            // Acrylic blurs whatever is directly behind the window on screen —
+            // including other overlapping app windows, not just the desktop.
+            // Mica (tried as a fallback) only ever blurs the desktop wallpaper,
+            // so it's not useful when the app overlaps other windows.
+            if apply_acrylic(&window, Some((13, 13, 13, 120))).is_err() {
+                let _ = apply_mica(&window, None);
+            }
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

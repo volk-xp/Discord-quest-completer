@@ -14,7 +14,8 @@
       {
         "title": "Discord Quest Completer By Volk.xp",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "transparent": true
       }
     ],
     "security": {
@@ -24,7 +25,7 @@
       },
       "csp": {
         "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost", 
+        "connect-src": "ipc: http://ipc.localhost https://github.com https://objects.githubusercontent.com", 
         "img-src": "'self' asset: http://asset.localhost blob: data:",
         "style-src": "'unsafe-inline' 'self'"
       }
@@ -33,6 +34,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -42,6 +44,14 @@
     ],
     "resources": {
       "resources/src-win.exe": "data/src-win.exe"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFEMUZFQUVGNTRDNEZENEQKUldSTi9jUlU3K29mSFhnWmVpRk5jeWxaL1lRQThJM29KcStTWHFPWHEwTmhaOXJVY0p1M01zYmcK",
+      "endpoints": [
+        "https://github.com/volk-xp/Discord-quest-completer-by-Volk/releases/latest/download/latest.json"
+      ]
     }
   }
 }

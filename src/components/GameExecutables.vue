@@ -23,7 +23,13 @@
                     </div>
                 </div>
 
-                <div class="justify-self-end">
+                <div class="justify-self-end flex items-center gap-2">
+                    <span class="flex items-center gap-1 text-[10px]"
+                        :class="gameActions?.isExecutableRunning(executable) ? 'text-green-500' : 'text-gray-500 dark:text-gray-500'">
+                        <span class="w-1.5 h-1.5 rounded-full"
+                            :class="gameActions?.isExecutableRunning(executable) ? 'bg-green-500 animate-pulse' : 'bg-gray-500'"></span>
+                        {{ gameActions?.isExecutableRunning(executable) ? 'Running' : 'Stopped' }}
+                    </span>
                     <button class="text-white rounded-md px-3 py-1"
                     :class="[
                         {
