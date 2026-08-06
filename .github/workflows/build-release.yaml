@@ -116,7 +116,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
-      
+
+      - name: debug bundle contents
+        shell: pwsh
+        run: |
+          Write-Host "--- Contents of src-tauri/target/release/bundle ---"
+          Get-ChildItem -Recurse "src-tauri/target/release/bundle"
+
       - name: stage artifacts for upload
         shell: pwsh
         run: |
@@ -171,8 +177,14 @@ jobs:
         shell: bash
         run: |
           set -e
-          NSIS_EXE=$(find tauri-win-release/bundle/nsis -name "*.exe" | head -n1)
-          NSIS_SIG=$(find tauri-win-release/bundle/nsis -name "*.exe.sig" | head -n1)
+          echo "--- Full contents of downloaded artifact ---"
+          find tauri-win-release -type f
+
+          NSIS_EXE=$(find tauri-win-release/bundle/nsis -name "*.exe" 2>/dev/null | head -n1)
+          NSIS_SIG=$(find tauri-win-release/bundle/nsis -name "*.exe.sig" 2>/dev/null | head -n1)
+
+          echo "Found NSIS_EXE: $NSIS_EXE"
+          echo "Found NSIS_SIG: $NSIS_SIG"
 
           if [ -z "$NSIS_EXE" ] || [ -z "$NSIS_SIG" ]; then
             echo "Could not find signed NSIS installer or its .sig file. Check that signing secrets are set."
