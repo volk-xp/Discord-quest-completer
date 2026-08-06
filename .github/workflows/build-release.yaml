@@ -117,17 +117,26 @@ jobs:
         with:
           args: ${{ matrix.args }}
       
+      - name: stage artifacts for upload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging/bundle | Out-Null
+          New-Item -ItemType Directory -Force -Path staging/data | Out-Null
+          New-Item -ItemType Directory -Force -Path staging/resources | Out-Null
+          Copy-Item src-tauri/target/release/discord-quest-completer.exe staging/
+          Copy-Item -Recurse -Force src-tauri/target/release/bundle/* staging/bundle/
+          Copy-Item -Recurse -Force src-tauri/target/release/data/* staging/data/
+          Copy-Item -Recurse -Force src-tauri/target/release/resources/* staging/resources/
+          Copy-Item version.txt staging/
+          Write-Host "--- Staged contents ---"
+          Get-ChildItem -Recurse staging
+
       - name: Create artifact for release
         id: create_artifact_for_release
         uses: actions/upload-artifact@v4
         with:
           name: tauri-win-release
-          path: |
-            src-tauri/target/release/discord-quest-completer.exe
-            src-tauri/target/release/bundle/
-            src-tauri/target/release/data/
-            src-tauri/target/release/resources/
-            version.txt
+          path: staging/
 
   release:
     needs: build-tauri
