@@ -30,7 +30,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          version=$(date +"%Y.%m.%d")
+          version="$(date +"%Y").$((10#$(date +"%m"))).$((10#$(date +"%d")))"
           echo "version=$version" >> $GITHUB_ENV
           echo "$version" > version.txt
 
