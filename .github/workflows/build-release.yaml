@@ -30,8 +30,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $now = Get-Date
-          $version = "$($now.Year).$($now.Month).$($now.Day)"
+          $version = "1.0.${{ github.run_number }}"
           echo "version=$version" >> $env:GITHUB_ENV
           Set-Content -Path version.txt -Value $version
           Write-Host "Computed version: $version"
