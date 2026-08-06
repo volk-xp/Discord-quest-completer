@@ -28,22 +28,24 @@ jobs:
 
       - name: compute version
         id: version
-        shell: bash
+        shell: pwsh
         run: |
-          version="$(date +"%Y").$((10#$(date +"%m"))).$((10#$(date +"%d")))"
-          echo "version=$version" >> $GITHUB_ENV
-          echo "$version" > version.txt
+          $now = Get-Date
+          $version = "$($now.Year).$($now.Month).$($now.Day)"
+          echo "version=$version" >> $env:GITHUB_ENV
+          Set-Content -Path version.txt -Value $version
+          Write-Host "Computed version: $version"
 
       - name: patch tauri.conf.json version
-        shell: bash
+        shell: pwsh
         run: |
-          node -e "
-            const fs = require('fs');
-            const path = 'src-tauri/tauri.conf.json';
-            const conf = JSON.parse(fs.readFileSync(path, 'utf8'));
-            conf.version = '${{ env.version }}';
-            fs.writeFileSync(path, JSON.stringify(conf, null, 2));
-          "
+          $confPath = "src-tauri/tauri.conf.json"
+          $conf = Get-Content $confPath -Raw | ConvertFrom-Json
+          $conf.version = "${{ env.version }}"
+          $conf | ConvertTo-Json -Depth 20 | Set-Content -Path $confPath
+          Write-Host "Patched tauri.conf.json version to: $($conf.version)"
+          Write-Host "--- Full file after patch ---"
+          Get-Content $confPath
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
