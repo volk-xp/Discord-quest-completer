@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
@@ -15,7 +15,7 @@ const installError = ref<string | null>(null);
 
 // Holds the actual Update object returned by the plugin so Step 7 can call
 // .downloadAndInstall() on it directly without re-checking.
-const pendingUpdate = ref<Update | null>(null);
+const pendingUpdate = shallowRef<Update | null>(null);
 
 async function checkForUpdate() {
     isChecking.value = true;
