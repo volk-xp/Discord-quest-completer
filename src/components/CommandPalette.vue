@@ -33,6 +33,11 @@ const commands: Command[] = [
         action: () => setPage(Pages.SETTINGS),
     },
     {
+        label: 'Go to Favorites',
+        hint: 'Navigation',
+        action: () => setPage(Pages.FAVORITES),
+    },
+    {
         label: 'Search games',
         hint: 'Focus the search bar',
         action: () => {
@@ -109,9 +114,11 @@ function handlePaletteKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
     window.addEventListener('keydown', handleGlobalKeydown);
+    window.addEventListener('dqc:open-palette', open);
 });
 onUnmounted(() => {
     window.removeEventListener('keydown', handleGlobalKeydown);
+    window.removeEventListener('dqc:open-palette', open);
 });
 </script>
 

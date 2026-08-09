@@ -15,12 +15,14 @@ import { emit } from '@tauri-apps/api/event';
 import { useFetchGameList } from '@/composables/fetch-gamelist';
 import { UseFuseOptions } from '@vueuse/integrations';
 import Fuse from 'fuse.js';
-import { useGlobalState } from '@/composables/app-state';
+import { Pages, useGlobalState } from '@/composables/app-state';
 import TimedNotification from '@/components/TimedNotification.vue';
 import UndoToast from '@/components/UndoToast.vue';
 import { useUserPrefs } from '@/composables/user-prefs';
+import { useFavorites } from '@/composables/use-favorites';
 import { useToasts } from '@/composables/use-toasts';
 import { useHistory } from '@/composables/use-history';
+import { useGameList } from '@/composables/use-game-list';
 
 
 type DialogKey = 
@@ -42,7 +44,7 @@ const {
     isReadyDiscord,
     allFetchDone,
 } = useFetchGameList()
-const { addLog } = useGlobalState();
+const { addLog, setPage } = useGlobalState();
 const shouldShowNotificationContainer = computed(() => {
     return isLoadingGH.value || isLoadingDiscord.value || isLoadingBundled.value ||
            (isReadyGH.value || isReadyDiscord.value || isReadyBundled.value);
@@ -55,7 +57,8 @@ const isDialogOpen = ref(false);
 const dialogKey = ref<DialogKey>('none')
 const isConnectedToRPC = ref(false);
 const isConnecting = ref(false);
-const { isFavorite, toggleFavorite, density, toggleDensity, notificationsEnabled } = useUserPrefs();
+const { density, toggleDensity, notificationsEnabled } = useUserPrefs();
+const { isFavorite, toggleFavorite: toggleFavoriteGame } = useFavorites();
 const { pushToast } = useToasts();
 const { addHistoryEntry } = useHistory();
 const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef');
@@ -97,37 +100,29 @@ function stopSessionTimer() {
     sessionElapsed.value = '00:00:00';
 }
 
-// Games are ordered directly in gameList.value. Both favoriting and drag-and-drop
-// reorder this array in place so there's a single source of truth for order.
-function handleToggleFavorite(gameUid: string | undefined | null) {
-    if (!gameUid) return;
-    toggleFavorite(gameUid);
+// Games are ordered directly in gameList.value. Favoriting regroups them;
+// the up/down arrow buttons let the user manually reorder within that.
+function handleToggleFavorite(game: Game) {
+    if (!game?.uid) return;
+    toggleFavoriteGame(game);
     // Regroup: favorites first (preserving their relative order), then the rest
     const favs = gameList.value.filter(g => isFavorite(g.uid));
     const rest = gameList.value.filter(g => !isFavorite(g.uid));
     gameList.value = [...favs, ...rest];
 }
 
-const dragFromIndex = ref<number | null>(null);
-
-function onDragStart(index: number) {
-    dragFromIndex.value = index;
-}
-
-function onDragOver(e: DragEvent) {
-    e.preventDefault();
-}
-
-function onDrop(index: number) {
-    if (dragFromIndex.value === null || dragFromIndex.value === index) {
-        dragFromIndex.value = null;
-        return;
-    }
+function moveGameUp(index: number) {
+    if (index <= 0) return;
     const updated = [...gameList.value];
-    const [moved] = updated.splice(dragFromIndex.value, 1);
-    updated.splice(index, 0, moved);
+    [updated[index - 1], updated[index]] = [updated[index], updated[index - 1]];
     gameList.value = updated;
-    dragFromIndex.value = null;
+}
+
+function moveGameDown(index: number) {
+    if (index >= gameList.value.length - 1) return;
+    const updated = [...gameList.value];
+    [updated[index], updated[index + 1]] = [updated[index + 1], updated[index]];
+    gameList.value = updated;
 }
 
 // Search functionality
@@ -200,8 +195,23 @@ function handleFocusSearchEvent() {
     openSearchResults();
 }
 
+function handleSelectFavoriteGame(e: Event) {
+    const game = (e as CustomEvent<Game>).detail;
+    if (!game?.uid) return;
+    let found = gameList.value.find(g => g.uid === game.uid);
+    if (!found) {
+        // The favorited game isn't currently in Home's session list
+        // (e.g. it was removed, or the app was just restarted) — add it
+        // back so Play works seamlessly regardless.
+        gameList.value = [...gameList.value, game];
+        found = game;
+    }
+    selectGame(found);
+}
+
 onMounted(() => {
     window.addEventListener('dqc:focus-search', handleFocusSearchEvent);
+    window.addEventListener('dqc:select-game', handleSelectFavoriteGame);
 });
 
 onUnmounted(() => {
@@ -209,10 +219,11 @@ onUnmounted(() => {
         clearInterval(sessionTimerInterval);
     }
     window.removeEventListener('dqc:focus-search', handleFocusSearchEvent);
+    window.removeEventListener('dqc:select-game', handleSelectFavoriteGame);
 });
 
 // Selected games list
-const gameList = ref<Game[]>([]);
+const { gameList } = useGameList();
 // const selectedGame = ref<Game | null>(null);
 const selectedGameId = ref<string | null | undefined>(null);
 
@@ -744,18 +755,24 @@ provide<GameActionsProvider>(GameActionsKey, {
                             density === 'compact' ? 'p-2' : 'p-3',
                             {
                                 'ring-1 ring-cyan-500/40 shadow-[0px_0px_8px_2px_#22d3ee50] bg-gray-100 dark:bg-gray-700/40': selectedGame?.uid === game.uid,
-                                'opacity-40': dragFromIndex === index,
                             }
                         ]" @click="selectGame(game)"
-                        draggable="true"
-                        @dragstart="onDragStart(index)"
-                        @dragover="onDragOver"
-                        @drop="onDrop(index)"
                     >
                         <div class="flex justify-between items-center">
                             <div class="flex items-center gap-1">
-                                <span class="text-gray-400 dark:text-gray-600 cursor-grab mr-1 text-xs select-none" title="Drag to reorder">⠿</span>
-                                <button @click.stop="handleToggleFavorite(game.uid)" class="mr-1 text-sm"
+                                <div class="flex flex-col mr-1">
+                                    <button @click.stop="moveGameUp(index)" :disabled="index === 0"
+                                        class="leading-none text-gray-400 dark:text-gray-600 hover:text-cyan-400 disabled:opacity-20 disabled:hover:text-gray-400 disabled:cursor-not-allowed"
+                                        title="Move up">
+                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 15 12 9 6 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </button>
+                                    <button @click.stop="moveGameDown(index)" :disabled="index === gameList.length - 1"
+                                        class="leading-none text-gray-400 dark:text-gray-600 hover:text-cyan-400 disabled:opacity-20 disabled:hover:text-gray-400 disabled:cursor-not-allowed"
+                                        title="Move down">
+                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9 12 15 18 9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </button>
+                                </div>
+                                <button @click.stop="handleToggleFavorite(game)" class="mr-2 text-2xl leading-none transition-transform hover:scale-110"
                                     :class="isFavorite(game.uid) ? 'text-amber-400' : 'text-gray-400 dark:text-gray-600 hover:text-amber-400'">
                                     {{ isFavorite(game.uid) ? '★' : '☆' }}
                                 </button>

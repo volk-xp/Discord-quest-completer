@@ -5,6 +5,7 @@ export const Pages = {
     HOME: 'home',
     PLAYGROUND: 'playground',
     SETTINGS: 'settings',
+    FAVORITES: 'favorites',
 } as const
 export type Pages = typeof Pages[keyof typeof Pages]
 export interface AppLogObject {

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Pages, useGlobalState } from '@/composables/app-state';
-import ShortcutsOverlay from './ShortcutsOverlay.vue';
-import OnboardingWizard from './OnboardingWizard.vue';
 import CommandPalette from './CommandPalette.vue';
+import OnboardingWizard from './OnboardingWizard.vue';
 import ToastContainer from './ToastContainer.vue';
 import UpdateBanner from './UpdateBanner.vue';
 
@@ -10,6 +9,10 @@ import UpdateBanner from './UpdateBanner.vue';
 
 const appState = useGlobalState();
 const { page, setPage } = appState;
+
+function openCommandPalette() {
+  window.dispatchEvent(new CustomEvent('dqc:open-palette'));
+}
 
 </script>
 
@@ -53,13 +56,22 @@ const { page, setPage } = appState;
             <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.04 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04Z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
+
+        <button @click="setPage(Pages.FAVORITES)" title="Favorites"
+          class="p-2 rounded-lg transition-colors"
+          :class="page === Pages.FAVORITES ? 'bg-cyan-950/60 text-cyan-400' : 'text-cyan-200/50 hover:text-cyan-300 hover:bg-cyan-950/30'">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 17.3 6.2 21l1.5-6.6L2.5 9.9l6.7-.6L12 3l2.8 6.3 6.7.6-5.2 4.5L18 21z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </nav>
 
       <div class="mt-auto text-center">
         <div class="text-[9px] text-cyan-400/50 leading-tight">Made by<br/>Volk.xp</div>
-        <div class="text-[8px] text-cyan-500/30 mt-2">
-          <kbd class="border border-cyan-900/50 rounded px-1">?</kbd>
-        </div>
+        <button @click="openCommandPalette"
+          class="text-[8px] text-cyan-400/70 hover:text-cyan-300 mt-2 border border-cyan-900/50 hover:border-cyan-700 rounded px-1.5 py-0.5 transition-colors">
+          Ctrl+K
+        </button>
       </div>
     </aside>
 
@@ -69,7 +81,6 @@ const { page, setPage } = appState;
       <slot />
     </main>
 
-    <ShortcutsOverlay />
     <OnboardingWizard />
     <CommandPalette />
     <ToastContainer />

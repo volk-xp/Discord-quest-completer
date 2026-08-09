@@ -4,6 +4,7 @@ import { Pages, useGlobalState } from './composables/app-state';
 import HomeView from './pages/HomeView.vue';
 import Playground from './pages/Playground.vue';
 import SettingsView from './pages/SettingsView.vue';
+import FavoritesView from './pages/FavoritesView.vue';
 
 const appState = useGlobalState();
 const { page } = appState;
@@ -15,6 +16,7 @@ const { page } = appState;
     <HomeView v-show="page === Pages.HOME"/>
     <Playground v-show="page === Pages.PLAYGROUND"/>
     <SettingsView v-show="page === Pages.SETTINGS"/>
+    <FavoritesView v-show="page === Pages.FAVORITES"/>
   </MainLayout>
 </template>
 

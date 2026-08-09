@@ -2,22 +2,14 @@ import { ref, watch } from 'vue';
 
 // Simple localStorage-backed preferences. This persists across app restarts
 // since Tauri's webview retains localStorage in its own user-data folder.
+//
+// Note: favorites now live in their own dedicated composable, use-favorites.ts,
+// since they need to store full game data (not just an ID) to stay independent
+// of Home's session-only game list. See that file instead.
 
-const FAVORITES_KEY = 'dqc:favorites';
 const DENSITY_KEY = 'dqc:density';
 const ONBOARDED_KEY = 'dqc:onboarded';
 const NOTIFICATIONS_KEY = 'dqc:notifications-enabled';
-
-function loadFavorites(): Set<string> {
-    try {
-        const raw = localStorage.getItem(FAVORITES_KEY);
-        if (!raw) return new Set();
-        const arr = JSON.parse(raw) as string[];
-        return new Set(arr);
-    } catch {
-        return new Set();
-    }
-}
 
 function loadDensity(): 'comfortable' | 'compact' {
     try {
@@ -46,7 +38,6 @@ function loadNotificationsEnabled(): boolean {
     }
 }
 
-const favorites = ref<Set<string>>(loadFavorites());
 const density = ref<'comfortable' | 'compact'>(loadDensity());
 const hasOnboarded = ref<boolean>(loadOnboarded());
 const notificationsEnabled = ref<boolean>(loadNotificationsEnabled());
@@ -67,14 +58,6 @@ watch(notificationsEnabled, (val) => {
     }
 });
 
-watch(favorites, (val) => {
-    try {
-        localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(val)));
-    } catch {
-        // ignore write errors (e.g. storage disabled)
-    }
-}, { deep: true });
-
 watch(density, (val) => {
     try {
         localStorage.setItem(DENSITY_KEY, val);
@@ -84,22 +67,6 @@ watch(density, (val) => {
 });
 
 export function useUserPrefs() {
-    function isFavorite(gameUid: string | undefined | null) {
-        if (!gameUid) return false;
-        return favorites.value.has(gameUid);
-    }
-
-    function toggleFavorite(gameUid: string | undefined | null) {
-        if (!gameUid) return;
-        const next = new Set(favorites.value);
-        if (next.has(gameUid)) {
-            next.delete(gameUid);
-        } else {
-            next.add(gameUid);
-        }
-        favorites.value = next;
-    }
-
     function toggleDensity() {
         density.value = density.value === 'comfortable' ? 'compact' : 'comfortable';
     }
@@ -113,10 +80,7 @@ export function useUserPrefs() {
     }
 
     return {
-        favorites,
         density,
-        isFavorite,
-        toggleFavorite,
         toggleDensity,
         hasOnboarded,
         completeOnboarding,
