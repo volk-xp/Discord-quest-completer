@@ -9,7 +9,7 @@ import { GameActionsProvider, GameExecutable, type Game } from '@/types/types';
 import IconVerified from '@/components/IconVerified.vue';
 import { isEmpty } from 'lodash-es';
 import GameExecutables from '@/components/GameExecutables.vue';
-import { GameActionsKey } from '@/constants/constants';
+import { GameActionsKey, EXECUTABLE_OS } from '@/constants/constants';
 import { path } from '@tauri-apps/api';
 import { emit } from '@tauri-apps/api/event';
 import { useFetchGameList } from '@/composables/fetch-gamelist';
@@ -23,6 +23,7 @@ import { useFavorites } from '@/composables/use-favorites';
 import { useToasts } from '@/composables/use-toasts';
 import { useHistory } from '@/composables/use-history';
 import { useGameList } from '@/composables/use-game-list';
+import { useRpcState } from '@/composables/use-rpc-state';
 
 
 type DialogKey = 
@@ -55,8 +56,7 @@ const searchResultContainerRef = useTemplateRef<HTMLElement>('searchResultContai
 const dialogMessage = ref('');
 const isDialogOpen = ref(false);
 const dialogKey = ref<DialogKey>('none')
-const isConnectedToRPC = ref(false);
-const isConnecting = ref(false);
+const { isConnectedToRPC, isConnecting, sessionElapsed } = useRpcState();
 const { density, toggleDensity, notificationsEnabled } = useUserPrefs();
 const { isFavorite, toggleFavorite: toggleFavoriteGame } = useFavorites();
 const { pushToast } = useToasts();
@@ -70,7 +70,6 @@ function notify(type: 'success' | 'error' | 'info', message: string) {
 }
 const undoToastRef = useTemplateRef<InstanceType<typeof UndoToast>>('undoToastRef');
 const rpcConnectedAt = ref<number | null>(null);
-const sessionElapsed = ref('00:00:00');
 let sessionTimerInterval: ReturnType<typeof setInterval> | null = null;
 
 function formatElapsed(ms: number) {
@@ -207,6 +206,9 @@ function handleSelectFavoriteGame(e: Event) {
         found = game;
     }
     selectGame(found);
+    // Prefer directly launching a win32 executable over requiring the user
+    // to manually pick one or use Test RPC.
+    autoPlayFavorite(found);
 }
 
 onMounted(() => {
@@ -384,6 +386,61 @@ async function playGame({game, executable}: {game: Game, executable: GameExecuta
         console.error('Failed to launch game:', error);
         notify('error', `Failed to launch ${game.name}`);
     }
+}
+
+// Path-building helpers, mirroring the same logic used in GameExecutables.vue,
+// needed here so auto-play (triggered from the Favorites tab) can launch a
+// win32 executable without requiring the user to open that component's UI.
+function isValidExecutablePath(name: string) {
+    const illegalChars = ['>', '<', ':', '"', '|', '?', '*'];
+    return !illegalChars.some(char => name.includes(char));
+}
+
+function splitExecutableName(name: string) {
+    const allSections = name.split(/\\|\//);
+    const last = name.split(/\\|\//).pop();
+    const trimmed = last?.split('.').slice(0, -1).join('.') || last;
+    return [...allSections.slice(0, -1), trimmed];
+}
+
+function getExecutablePath(name: string) {
+    const allSections = name.split(/\\|\//);
+    return allSections.slice(0, -1).join(path.sep());
+}
+
+function getFilename(name: string) {
+    return name.split(/\\|\//).pop();
+}
+
+// Auto-play: used when launching a game from the Favorites tab. If the game
+// has a usable win32 executable, launch it directly (installing the dummy
+// exe first if needed) instead of requiring the user to manually pick it or
+// use Test RPC. Returns true if it found and launched something.
+async function autoPlayFavorite(game: Game): Promise<boolean> {
+    const win32Exe = game.executables?.find(exe =>
+        exe.os === EXECUTABLE_OS.WINDOWS && isValidExecutablePath(exe.name)
+    );
+    if (!win32Exe) {
+        return false;
+    }
+    if (win32Exe.is_running) {
+        // Already running — nothing to do.
+        return true;
+    }
+
+    const executable: GameExecutable = {
+        ...win32Exe,
+        path: getExecutablePath(win32Exe.name),
+        segments: splitExecutableName(win32Exe.name).length,
+        filename: getFilename(win32Exe.name),
+    };
+
+    if (!isGameExecutableInstalled(executable)) {
+        await installAndPlay({ game, executable });
+    } else {
+        await playGame({ game, executable });
+    }
+    return true;
 }
 
 // Stop playing
@@ -571,33 +628,9 @@ provide<GameActionsProvider>(GameActionsKey, {
                 </div>
             </div>
         </dialog>
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 text-center">
             Discord QC
         </h1>
-
-        <div class="flex justify-center mb-6">
-            <span class="text-xs text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-900 px-3 py-1 rounded-full flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full" :class="isConnectedToRPC ? 'bg-green-500' : 'bg-cyan-500'"></span>
-                {{ isConnectedToRPC ? 'Connected' : 'Idle' }}
-            </span>
-        </div>
-
-        <div class="grid grid-cols-3 gap-3 mb-6 max-w-2xl mx-auto">
-            <div class="bg-white/80 dark:bg-slate-900/40 backdrop-blur-sm border border-gray-200 dark:border-cyan-900/50 rounded-lg p-3 text-center">
-                <div class="text-xs text-gray-500 dark:text-cyan-300/70">Games tracked</div>
-                <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ gameList.length }}</div>
-            </div>
-            <div class="bg-white/80 dark:bg-slate-900/40 backdrop-blur-sm border border-gray-200 dark:border-cyan-900/50 rounded-lg p-3 text-center">
-                <div class="text-xs text-gray-500 dark:text-cyan-300/70">Verified games</div>
-                <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ gameDB.length }}</div>
-            </div>
-            <div class="bg-white/80 dark:bg-slate-900/40 backdrop-blur-sm border border-gray-200 dark:border-cyan-900/50 rounded-lg p-3 text-center">
-                <div class="text-xs text-gray-500 dark:text-cyan-300/70">RPC status</div>
-                <div class="text-lg font-semibold" :class="isConnectedToRPC ? 'text-green-500' : 'text-cyan-500'">
-                    {{ isConnectedToRPC ? 'Live' : 'Off' }}
-                </div>
-            </div>
-        </div>
 
         <!-- refetch game list fetch status. will appear on top left -->
         <Transition 

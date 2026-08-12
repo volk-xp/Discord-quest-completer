@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Pages, useGlobalState } from '@/composables/app-state';
+import { useGameList } from '@/composables/use-game-list';
+import { useRpcState } from '@/composables/use-rpc-state';
 import CommandPalette from './CommandPalette.vue';
 import OnboardingWizard from './OnboardingWizard.vue';
 import ToastContainer from './ToastContainer.vue';
@@ -9,6 +11,8 @@ import UpdateBanner from './UpdateBanner.vue';
 
 const appState = useGlobalState();
 const { page, setPage } = appState;
+const { gameList } = useGameList();
+const { isConnectedToRPC } = useRpcState();
 
 function openCommandPalette() {
   window.dispatchEvent(new CustomEvent('dqc:open-palette'));
@@ -19,7 +23,7 @@ function openCommandPalette() {
 <template>
   <div class="flex h-dvh overflow-hidden">
     <!-- Sidebar nav rail -->
-    <aside class="w-20 flex flex-col items-center py-5 gap-6 bg-slate-950/40 backdrop-blur-xl border-r border-cyan-900/40">
+    <aside class="w-28 flex flex-col items-center py-5 gap-6 bg-slate-950/40 backdrop-blur-xl border-r border-cyan-900/40">
       <div class="flex flex-col items-center gap-1">
         <svg class="h-6 w-6 text-cyan-400" viewBox="0 0 24 24" fill="currentColor">
           <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/>
@@ -65,6 +69,20 @@ function openCommandPalette() {
           </svg>
         </button>
       </nav>
+
+      <div class="w-full px-2 flex flex-col gap-2 mt-2">
+        <div class="bg-cyan-950/30 border border-cyan-900/50 rounded-lg py-2 text-center">
+          <div class="text-[8px] text-cyan-400/60">Tracked</div>
+          <div class="text-sm text-white font-semibold">{{ gameList.length }}</div>
+        </div>
+        <div class="border rounded-lg py-1.5 text-center flex items-center justify-center gap-1"
+          :class="isConnectedToRPC ? 'bg-green-950/30 border-green-900/50' : 'bg-cyan-950/30 border-cyan-900/50'">
+          <span class="w-1.5 h-1.5 rounded-full" :class="isConnectedToRPC ? 'bg-green-500' : 'bg-cyan-500'"></span>
+          <span class="text-[9px]" :class="isConnectedToRPC ? 'text-green-400' : 'text-cyan-400'">
+            {{ isConnectedToRPC ? 'Connected' : 'Idle' }}
+          </span>
+        </div>
+      </div>
 
       <div class="mt-auto text-center">
         <div class="text-[9px] text-cyan-400/50 leading-tight">Made by<br/>Volk.xp</div>
