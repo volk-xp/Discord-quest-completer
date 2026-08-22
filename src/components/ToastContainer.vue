@@ -9,9 +9,9 @@ const iconFor = {
     info: 'ℹ',
 };
 const colorFor = {
-    success: 'border-l-green-500 text-green-400',
-    error: 'border-l-red-500 text-red-400',
-    info: 'border-l-amber-500 text-amber-400',
+    success: 'border-l-live text-live',
+    error: 'border-l-alert text-alert',
+    info: 'border-l-signal text-signal',
 };
 </script>
 
@@ -26,11 +26,11 @@ const colorFor = {
             leave-to-class="opacity-0 translate-x-4"
         >
             <div v-for="toast in toasts" :key="toast.id"
-                class="bg-slate-900/75 backdrop-blur-xl border border-cyan-900/60 rounded-lg shadow-lg px-3 py-2.5 flex items-center gap-2 border-l-2"
+                class="bg-deck-850/85 backdrop-blur-xl border border-line rounded-[8px] shadow-[0_14px_34px_-10px_rgba(0,0,0,0.8)] px-3 py-2.5 flex items-center gap-2 border-l-2"
                 :class="colorFor[toast.type]">
                 <span class="text-sm">{{ iconFor[toast.type] }}</span>
-                <span class="text-xs text-white flex-1">{{ toast.message }}</span>
-                <button @click="dismissToast(toast.id)" class="text-gray-500 hover:text-gray-300 text-xs">✕</button>
+                <span class="text-[11.5px] text-ink flex-1">{{ toast.message }}</span>
+                <button @click="dismissToast(toast.id)" class="text-ink-faint hover:text-ink text-xs">✕</button>
             </div>
         </TransitionGroup>
     </div>

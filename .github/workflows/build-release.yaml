@@ -224,7 +224,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.version }}
-          name: Pre-Release ${{ env.version }}
+          name: Release ${{ env.version }}
           body: |
             ![GitHub Downloads (specific asset, specific tag)](https://img.shields.io/github/downloads/volk-xp/Discord-quest-completer-by-Volk/${{ env.version }}/${{ env.win_build_release_dir }}.zip)
 
@@ -238,7 +238,15 @@ jobs:
             ./build/${{ env.win_build_release_dir }}.zip
             ./build/discord-quest-completer-setup.exe
             ./build/latest.json
-          prerelease: true
+          # Must stay false. The in-app updater reads
+          # /releases/latest/download/latest.json, and GitHub's "latest"
+          # endpoint skips over prereleases entirely — marking a release as a
+          # prerelease makes it invisible to the updater, so check() 404s and
+          # no user ever sees the update banner.
+          prerelease: false
+          # Still created as a draft so the release can be reviewed first.
+          # Clicking "Publish release" on GitHub is what makes it "latest"
+          # and actually delivers the update to installed clients.
           draft: true
         env:
           version: ${{ env.version }}

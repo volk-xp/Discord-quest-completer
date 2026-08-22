@@ -1,40 +1,46 @@
 <template>
-    <div class="text-gray-500 dark:text-gray-400">
-        <h3>
+    <div>
+        <h3 class="text-[11.5px] leading-relaxed text-ink-dim">
             The game has multiple platform executables. Please select one to launch:
         </h3>
 
-        <div class="text-xs mt-2">
+        <div class="mt-3 space-y-1.5">
             <div v-for="(executable) in filteredExecutables" :key="executable.name"
-                class="grid grid-cols-[auto_1fr_auto] gap-2 items-center mb-2 w-full">
-                <div class="w-14 max-w-[80px]">
-                    <div class="bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 w-fit">
+                class="grid grid-cols-[auto_1fr_auto] gap-2.5 items-center w-full rounded-[6px] border border-line
+                bg-deck-850/50 px-2.5 py-2">
+                <div class="shrink-0">
+                    <div class="font-display uppercase tracking-[0.12em] text-[8.5px] text-ink-dim bg-deck-800 border border-line rounded px-1.5 py-1 w-fit">
                         {{ executable.os }}
                     </div>
                 </div>
 
                 <!-- Sections / Breadcrumbs must fade when too long -->
-                <div class="relative overflow-hidden ">
+                <div class="relative overflow-hidden min-w-0">
                     <div class="flex flex-nowrap overflow-x-auto scrollbar-none max-w-full pr-4 fade-right">
                         <div v-for="(section, i) in splitExecutableName(executable)" :key="i"
-                            class="text-center border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1 mr-1 whitespace-nowrap">
+                            class="font-mono text-[10.5px] text-ink-dim border border-line rounded px-1.5 py-0.5 mr-1 whitespace-nowrap">
                             <span>{{ section }}</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="justify-self-end flex items-center gap-2">
-                    <span class="flex items-center gap-1 text-[10px]"
-                        :class="gameActions?.isExecutableRunning(executable) ? 'text-green-500' : 'text-gray-500 dark:text-gray-500'">
+                <div class="justify-self-end flex items-center gap-2 shrink-0">
+                    <span v-if="playSessionFor(executable)"
+                        class="font-mono text-[9.5px] text-signal shrink-0"
+                        title="Time left before this window closes automatically">
+                        {{ formatCountdown(remainingMs(playSessionFor(executable))) }}
+                    </span>
+                    <span class="flex items-center gap-1 font-display uppercase tracking-[0.12em] text-[8.5px]"
+                        :class="gameActions?.isExecutableRunning(executable) ? 'text-live' : 'text-ink-faint'">
                         <span class="w-1.5 h-1.5 rounded-full"
-                            :class="gameActions?.isExecutableRunning(executable) ? 'bg-green-500 animate-pulse' : 'bg-gray-500'"></span>
+                            :class="gameActions?.isExecutableRunning(executable) ? 'bg-live animate-pulse' : 'bg-ink-faint/50'"></span>
                         {{ gameActions?.isExecutableRunning(executable) ? 'Running' : 'Stopped' }}
                     </span>
-                    <button class="text-white rounded-md px-3 py-1"
+                    <button class="font-display uppercase tracking-[0.14em] text-[9px] rounded-[5px] px-2.5 py-1.5 transition-colors"
                     :class="[
                         {
-                            'bg-amber-600 hover:bg-amber-700': !gameActions?.isExecutableRunning(executable),
-                            'bg-red-600 hover:bg-red-700': gameActions?.isExecutableRunning(executable),
+                            'bg-signal text-deck-950 hover:bg-signal/85': !gameActions?.isExecutableRunning(executable),
+                            'border border-alert/50 text-alert hover:bg-alert/10': gameActions?.isExecutableRunning(executable),
                         },
                     ]"
                         @click="handleLaunch(executable)"
@@ -52,6 +58,7 @@ import { EXECUTABLE_OS, GameActionsKey } from '@/constants/constants';
 import { GameActionsProvider, type Game, type GameExecutable } from '@/types/types';
 import { path, app } from '@tauri-apps/api';
 import { computed, inject } from 'vue';
+import { usePlaySessions } from '@/composables/use-play-sessions';
 
 const props = defineProps<{
     game: Game
@@ -64,6 +71,14 @@ const emit = defineEmits<{
 }>();
 
 const gameActions = inject<GameActionsProvider>(GameActionsKey);
+
+const { getPlaySession, remainingMs, formatCountdown } = usePlaySessions();
+
+// Each launched executable runs its own auto-stop window, so the countdown is
+// looked up per row rather than read from a single shared session.
+function playSessionFor(executable: GameExecutable) {
+    return getPlaySession(props.game.uid, executable.name);
+}
 
 const filteredExecutables = computed(() => {
     return props.game.executables.filter(executable => {

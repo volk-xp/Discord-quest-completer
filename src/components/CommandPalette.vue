@@ -125,26 +125,29 @@ onUnmounted(() => {
 <template>
     <div v-if="isOpen" class="fixed inset-0 z-[105] flex items-start justify-center pt-24 bg-black/70 backdrop-blur-xs"
         @click.self="close">
-        <div class="bg-slate-900/70 backdrop-blur-xl border border-cyan-900 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-            <div class="flex items-center gap-2 px-4 py-3 border-b border-cyan-900/50">
-                <span class="text-cyan-500 text-sm">⌘</span>
+        <div class="bg-deck-850/95 backdrop-blur-xl border border-line rounded-[10px] shadow-[0_28px_64px_-14px_rgba(0,0,0,0.85)] w-full max-w-md mx-4 overflow-hidden font-sans">
+            <div class="flex items-center gap-2 px-3.5 py-3 border-b border-line">
+                <svg class="h-3.5 w-3.5 text-ink-faint shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
                 <input ref="inputRef" v-model="query" @keydown="handlePaletteKeydown"
                     type="text" placeholder="Type a command or search..."
-                    class="flex-1 bg-transparent text-sm text-white placeholder-cyan-300/40 outline-none" />
-                <kbd class="text-[10px] text-cyan-300/60 border border-cyan-900 rounded px-1">Esc</kbd>
+                    class="flex-1 bg-transparent text-[12.5px] text-ink placeholder-ink-faint outline-none" />
+                <kbd class="font-mono text-[9.5px] text-ink-faint border border-line bg-deck-900 rounded px-1 py-px">Esc</kbd>
             </div>
             <div class="max-h-72 overflow-y-auto p-1.5">
-                <div v-if="filteredCommands.length === 0" class="text-xs text-gray-500 text-center py-6">
+                <div v-if="filteredCommands.length === 0" class="text-[11.5px] text-ink-faint text-center py-6">
                     No matching commands
                 </div>
                 <div v-for="(cmd, i) in filteredCommands" :key="cmd.label"
-                    class="flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm"
-                    :class="i === activeIndex ? 'bg-cyan-950/60 text-white' : 'text-cyan-100/80 hover:bg-cyan-950/30'"
+                    class="relative flex items-center justify-between px-3 py-2 rounded-[6px] cursor-pointer text-[12.5px]"
+                    :class="i === activeIndex ? 'bg-signal/[0.09] text-ink' : 'text-ink-dim hover:bg-deck-700/50'"
                     @mouseenter="activeIndex = i"
                     @click="cmd.action(); close();"
                 >
+                    <span v-if="i === activeIndex" class="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-signal"></span>
                     <span>{{ cmd.label }}</span>
-                    <span v-if="cmd.hint" class="text-[10px] text-cyan-300/50">{{ cmd.hint }}</span>
+                    <span v-if="cmd.hint" class="font-mono text-[9.5px] text-ink-faint">{{ cmd.hint }}</span>
                 </div>
             </div>
         </div>

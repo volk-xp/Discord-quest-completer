@@ -26,54 +26,56 @@ function formatDate(dateStr: string | null) {
 </script>
 
 <template>
-    <div v-if="updateAvailable" class="px-4 pt-4">
-        <div class="flex items-center gap-3 bg-cyan-950/40 backdrop-blur-md border border-cyan-900/60 rounded-lg px-4 py-2.5">
-            <svg class="h-4 w-4 text-cyan-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <div v-if="updateAvailable" class="px-4 pt-3">
+        <div class="flex items-center gap-3 bg-signal/[0.07] backdrop-blur-md border border-signal/30 rounded-[7px] px-3.5 py-2">
+            <svg class="h-4 w-4 text-signal flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="text-sm text-white flex-1">
-                Version <strong>{{ latestVersion }}</strong> is available
+            <span class="text-[12px] text-ink flex-1">
+                Version <strong class="font-mono text-signal">{{ latestVersion }}</strong> is available
             </span>
-            <button @click="showChangelog = true" class="text-xs font-medium text-cyan-400 hover:text-cyan-300">
+            <button @click="showChangelog = true"
+                class="font-display uppercase tracking-[0.14em] text-[9.5px] text-signal hover:text-signal/80">
                 View
             </button>
-            <button @click="dismissUpdate" class="text-gray-500 hover:text-gray-300 text-xs">✕</button>
+            <button @click="dismissUpdate" class="text-ink-faint hover:text-ink text-xs">✕</button>
         </div>
     </div>
 
     <div v-if="showChangelog" class="fixed inset-0 z-[108] flex items-center justify-center bg-black/70 backdrop-blur-sm"
         @click.self="!isDownloading && (showChangelog = false)">
-        <div class="bg-slate-900/90 backdrop-blur-xl border border-cyan-900 rounded-lg shadow-2xl w-full max-w-md mx-4 p-6">
+        <div class="bg-deck-850/95 backdrop-blur-xl border border-line rounded-[10px] shadow-[0_28px_64px_-14px_rgba(0,0,0,0.85)] w-full max-w-md mx-4 p-5">
             <div class="flex items-center justify-between mb-1">
-                <h3 class="text-base font-semibold text-white">What's new in v{{ latestVersion }}</h3>
-                <button v-if="!isDownloading" @click="showChangelog = false" class="text-gray-500 hover:text-gray-300 text-sm">✕</button>
+                <h3 class="eyebrow">What's new in v{{ latestVersion }}</h3>
+                <button v-if="!isDownloading" @click="showChangelog = false" class="text-ink-faint hover:text-ink text-sm">✕</button>
             </div>
-            <div v-if="releaseDate" class="text-xs text-cyan-300/60 mb-4">{{ formatDate(releaseDate) }}</div>
+            <div v-if="releaseDate" class="font-mono text-[10px] text-ink-faint mb-4">{{ formatDate(releaseDate) }}</div>
 
-            <div class="text-sm text-gray-300 whitespace-pre-line max-h-64 overflow-y-auto mb-5 leading-relaxed">
+            <div class="text-[12px] text-ink-dim whitespace-pre-line max-h-64 overflow-y-auto mb-5 leading-relaxed">
                 {{ releaseNotes || 'No release notes provided for this version.' }}
             </div>
 
             <div v-if="isDownloading" class="mb-4">
-                <div class="flex items-center justify-between text-xs text-cyan-300/70 mb-1.5">
+                <div class="flex items-center justify-between font-mono text-[10.5px] text-ink-dim mb-1.5">
                     <span>Downloading update...</span>
-                    <span>{{ downloadProgress }}%</span>
+                    <span class="text-signal">{{ downloadProgress }}%</span>
                 </div>
-                <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div class="h-full bg-cyan-500 transition-all duration-200" :style="{ width: downloadProgress + '%' }"></div>
+                <div class="h-1.5 bg-deck-800 border border-line rounded-full overflow-hidden">
+                    <div class="h-full bg-signal transition-all duration-200" :style="{ width: downloadProgress + '%' }"></div>
                 </div>
             </div>
 
-            <div v-if="installError" class="text-xs text-red-400 mb-4">
+            <div v-if="installError" class="text-[11.5px] text-alert mb-4">
                 Failed to install update: {{ installError }}
             </div>
 
             <div class="flex items-center justify-end gap-3">
-                <button v-if="!isDownloading" @click="showChangelog = false" class="text-sm text-gray-400 hover:text-gray-300">
+                <button v-if="!isDownloading" @click="showChangelog = false"
+                    class="font-display uppercase tracking-[0.14em] text-[10px] text-ink-dim hover:text-ink border border-line hover:border-ink-faint rounded-[6px] px-3.5 py-2 transition-colors">
                     Later
                 </button>
                 <button @click="installUpdate" :disabled="isDownloading"
-                    class="bg-cyan-700 hover:bg-cyan-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg">
+                    class="bg-signal hover:bg-signal/85 disabled:opacity-60 disabled:cursor-not-allowed text-deck-950 font-display uppercase tracking-[0.14em] text-[10px] px-4 py-2 rounded-[6px] transition-colors">
                     {{ isDownloading ? 'Installing...' : 'Install & Restart' }}
                 </button>
             </div>

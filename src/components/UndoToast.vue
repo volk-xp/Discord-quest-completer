@@ -46,10 +46,10 @@ defineExpose({ show });
         leave-to-class="opacity-0 translate-y-2"
     >
         <div v-if="isVisible"
-            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] bg-slate-900/70 backdrop-blur-xl border border-cyan-900 rounded-lg shadow-xl px-4 py-2.5 flex items-center gap-4">
-            <span class="text-sm text-white">{{ message }}</span>
-            <button @click="handleUndo" class="text-sm font-semibold text-cyan-400 hover:text-cyan-300">Undo</button>
-            <button @click="dismiss" class="text-gray-500 hover:text-gray-300 text-xs">✕</button>
+            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] bg-deck-850/90 backdrop-blur-xl border border-line rounded-[8px] shadow-[0_18px_44px_-12px_rgba(0,0,0,0.85)] px-4 py-2.5 flex items-center gap-4">
+            <span class="text-[12px] text-ink">{{ message }}</span>
+            <button @click="handleUndo" class="font-display uppercase tracking-[0.14em] text-[9.5px] text-signal hover:text-signal/80">Undo</button>
+            <button @click="dismiss" class="text-ink-faint hover:text-ink text-xs">✕</button>
         </div>
     </Transition>
 </template>

@@ -1,5 +1,166 @@
 @import "tailwindcss";
 
-html, body, #app {
+/* ---------------------------------------------------------------------------
+   "Console" theme.
+
+   The app is an instrument panel, not a website: it reports what Discord is
+   seeing right now. So the palette is graphite with a single amber signal
+   colour, data is always set in a monospaced face, and every label is a small
+   letterspaced caption. Naming these as @theme variables means they become
+   real Tailwind utilities (bg-deck-850, text-signal, border-line, font-mono...)
+   instead of magic hex values scattered through the templates.
+   --------------------------------------------------------------------------- */
+@theme {
+    /* Surfaces, darkest to lightest */
+    --color-deck-950: #080b0d; /* nav rail */
+    --color-deck-900: #0b0e11; /* app floor */
+    --color-deck-850: #12171c; /* panels */
+    --color-deck-800: #161c22; /* raised rows, inputs */
+    --color-deck-700: #1a2229; /* hover */
+
+    /* Hairlines */
+    --color-line: #1e2730;
+    --color-line-soft: #161e26;
+
+    /* Text */
+    --color-ink: #e6edf3;
+    --color-ink-dim: #7d8b99;
+    --color-ink-faint: #55636f;
+
+    /* Signal: used only for the thing that is happening right now */
+    --color-signal: #ffb020;
+    --color-signal-deep: #8a5f14;
+    --color-live: #3dd68c;
+    --color-alert: #ff6a5e;
+
+    /* Type roles. All three ship with Windows, so nothing is downloaded and
+       nothing falls back to a random webview default. */
+    --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "Cascadia Mono", Consolas, "Courier New", ui-monospace, monospace;
+    --font-display: "Bahnschrift SemiLight", "Bahnschrift", "DIN Next",
+        "Segoe UI Variable Display", "Segoe UI", sans-serif;
+}
+
+/* The Tauri window is acrylic/mica, so the document itself must stay see-through
+   or the blur behind it is wasted. Panels supply their own tint on top. */
+html,
+body,
+#app {
     background: transparent !important;
+}
+
+@layer base {
+    :root {
+        /* Native widgets (scrollbars, the <dialog> backdrop, form controls)
+           follow this rather than the OS setting, so the app stays dark even
+           when Windows is in light mode. */
+        color-scheme: dark;
+    }
+
+    body {
+        color: var(--color-ink);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* Tabular numbers everywhere data is monospaced, so timers and app ids
+       don't jitter as digits change. */
+    .font-mono,
+    code,
+    kbd {
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum" 1;
+    }
+
+    ::selection {
+        background: var(--color-signal-deep);
+        color: var(--color-ink);
+    }
+
+    /* Thin, flush scrollbars — a fat grey bar breaks the panel edges. */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-line) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--color-line);
+        border: 3px solid transparent;
+        background-clip: content-box;
+        border-radius: 999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #2b3742;
+        background-clip: content-box;
+    }
+
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
+    /* Keyboard users get a visible ring; mouse users never see it. */
+    :focus-visible {
+        outline: 1px solid var(--color-signal);
+        outline-offset: 1px;
+    }
+}
+
+@layer components {
+    /* A caption that labels a region: 10px, uppercase, widely tracked.
+       Used for every panel header so the hierarchy is carried by type, not by
+       boxes inside boxes. */
+    .eyebrow {
+        font-family: var(--font-display);
+        font-size: 10px;
+        line-height: 1;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--color-ink-dim);
+    }
+
+    /* Key/value readout used in the target + presence panels. */
+    .kv {
+        display: grid;
+        grid-template-columns: 84px minmax(0, 1fr);
+        gap: 6px 10px;
+        align-items: baseline;
+    }
+
+    .kv > dt {
+        font-family: var(--font-display);
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--color-ink-faint);
+        padding-top: 2px;
+    }
+
+    .kv > dd {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--color-ink);
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
 }
