@@ -687,8 +687,13 @@ provide<GameActionsProvider>(GameActionsKey, {
             </div>
         </dialog>
 
-        <!-- ================= LIBRARY COLUMN ================= -->
-        <aside class="w-[264px] lg:w-[322px] shrink-0 flex flex-col min-h-0 border-r border-line/70 bg-deck-850/40 backdrop-blur-md">
+        <!-- ================= LIBRARY COLUMN =================
+             Width matters more than it looks: the game names inside truncate to
+             whatever room is left after the row controls, so a narrow column is
+             what turns "Call of Duty: Modern Warfare 4" into "Call of Duty: ...".
+             The window now has a 1024px minWidth, so the lg: width is the real
+             floor here and the 320px variant only exists as a fallback. -->
+        <aside class="w-[320px] lg:w-[400px] xl:w-[440px] shrink-0 flex flex-col min-h-0 border-r border-line/70 bg-deck-850/40 backdrop-blur-md">
 
             <!-- Search + refetch -->
             <div class="px-3 pt-3 pb-2.5 border-b border-line/60 shrink-0">
@@ -718,13 +723,15 @@ provide<GameActionsProvider>(GameActionsKey, {
                     </div>
                     <div v-if="searchResultsIsOpen" @click="isOnSearchResults = true"
                         class="absolute z-50 mt-1.5 w-full bg-deck-850/95 backdrop-blur-xl border border-line rounded-[8px]
-                        shadow-[0_18px_40px_-12px_rgba(0,0,0,0.85)] max-h-[300px] overflow-y-auto">
+                        shadow-[0_18px_40px_-12px_rgba(0,0,0,0.85)] max-h-[420px] overflow-y-auto">
                         <div v-if="searchResults.length > 0">
                             <div v-for="game in searchResults" :key="game.item.id"
                                 class="p-2.5 border-b border-line/60 last:border-b-0 hover:bg-deck-700/40 transition-colors">
                                 <div class="flex items-start justify-between gap-2">
                                     <div class="min-w-0">
-                                        <div class="text-[12.5px] text-ink truncate">
+                                        <!-- Wraps instead of truncating. Distinguishing "Modern Warfare 4"
+                                             from "Modern Warfare 2" is the whole point of this list. -->
+                                        <div class="text-[12.5px] text-ink leading-snug break-words" :title="game.item.name">
                                             {{ game.item.name }}
                                         </div>
                                         <div class="font-mono text-[10px] text-ink-faint mt-0.5">ID: {{ game.item.id }}</div>
@@ -739,7 +746,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                                     <div class="eyebrow text-[8px] mb-1">Executables</div>
                                     <ul class="space-y-0.5">
                                         <li v-for="exe in game.item.executables" :key="exe.name"
-                                            class="font-mono text-ink-dim truncate">
+                                            class="font-mono text-ink-dim truncate" :title="`${exe.name} (${exe.os})`">
                                             <span>
                                             {{ exe.name }}
                                             ({{ exe.os }})</span>
@@ -871,7 +878,7 @@ provide<GameActionsProvider>(GameActionsKey, {
 
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1">
-                                    <div class="text-[12.5px] text-ink truncate">{{ game.name }}</div>
+                                    <div class="text-[12.5px] text-ink truncate" :title="game.name">{{ game.name }}</div>
                                     <div class="relative inline-flex items-center shrink-0">
                                         <div class="w-2 h-2 bg-white absolute rounded-full" style="left: 50%; top: 50%; transform: translate(-50%, -50%)"></div>
                                         <div class="relative inline-block">
