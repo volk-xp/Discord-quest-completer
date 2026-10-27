@@ -43,8 +43,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
-import { emit } from '@tauri-apps/api/event';
+import { useRpcState } from '@/composables/use-rpc-state';
 import { useGlobalState } from '@/composables/app-state';
 
 const ActivityKind = {
@@ -54,33 +53,29 @@ const ActivityKind = {
     Competing: 5
 } as const;
 
-const isConnected = ref(false);
+const { isConnectedToRPC: isConnected, isConnecting, isDisconnecting, connectRpc, disconnectRpc } = useRpcState();
 
 const { logs, addLog, clearLogs } = useGlobalState();
 
-function discordTest() {
+async function discordTest() {
+    if (isDisconnecting.value) return;
 
     const appIdCode = '1361728268088381706';
 
-    if (isConnected.value) {
+    if (isConnected.value || isConnecting.value) {
         console.log('Disconnecting from Discord');
-        emit('event_disconnect');
-        isConnected.value = false;
+        await disconnectRpc();
         return;
     }
 
-    invoke('connect_to_discord_rpc_3', {
-        activity_json: JSON.stringify({
+    await connectRpc({
             app_id: appIdCode,
             details: 'Jhabol',
             // details: 'xmonad -> dwm -> spectrwm -> i3 -> bspwm -> qtile -> hyrpland -> xfce -> gnome -> sway',
             state: "/jhabol",
             activity_kind: ActivityKind.Watching,
             timestamp: createAgoTimestamp('1h 30m')
-        }),
-        action: 'connect',
     });
-    isConnected.value = true;
 }
 
 // function to create timestamp behind current time.

@@ -3,6 +3,10 @@ name: 'publish'
 on:
   workflow_dispatch:
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: write
@@ -12,6 +16,7 @@ env:
 
 jobs:
   build-tauri:
+    if: github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
       contents: write
     strategy:
@@ -24,27 +29,16 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
+      - name: Validate updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY must be configured for signed releases."
+          }
+
       - uses: actions/checkout@v4
-
-      - name: compute version
-        id: version
-        shell: pwsh
-        run: |
-          $version = "1.0.${{ github.run_number }}"
-          echo "version=$version" >> $env:GITHUB_ENV
-          Set-Content -Path version.txt -Value $version
-          Write-Host "Computed version: $version"
-
-      - name: patch tauri.conf.json version
-        shell: pwsh
-        run: |
-          $confPath = "src-tauri/tauri.conf.json"
-          $conf = Get-Content $confPath -Raw | ConvertFrom-Json
-          $conf.version = "${{ env.version }}"
-          $conf | ConvertTo-Json -Depth 20 | Set-Content -Path $confPath
-          Write-Host "Patched tauri.conf.json version to: $($conf.version)"
-          Write-Host "--- Full file after patch ---"
-          Get-Content $confPath
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
@@ -56,6 +50,17 @@ jobs:
         with:
           node-version: lts/*
           cache: 'pnpm'
+
+      - name: Verify increasing release version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > release-versions.json
+          version=$(node scripts/release-version.mjs release release-versions.json)
+          echo "version=$version" >> "$GITHUB_ENV"
+          printf '%s\n' "$version" > version.txt
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -81,26 +86,10 @@ jobs:
         env:
           GAME_LIST_URL: ${{ secrets.GAME_LIST_URL }}
         run: |
-          curl -L -o src/assets/gamelist.json $GAME_LIST_URL
-          if [ ! -f src/assets/gamelist.json ]; then
-            echo "Failed to download game list"
-            exit 1
-          fi
-          if [ ! -s src/assets/gamelist.json ]; then
-            echo "Game list is empty"
-            exit 1
-          fi
+          set -euo pipefail
+          curl --fail --show-error --location --output src/assets/gamelist.json "$GAME_LIST_URL"
+          node scripts/validate-catalog.mjs
       
-      # Build src-win
-      - name: Build src-win project x86_64 binary
-        if: matrix.platform == 'windows-latest'
-        shell: bash
-        run: | 
-          cd src-win
-          cargo build --release --verbose
-          cd ..
-          cp ./src-win/target/release/src-win.exe ./src-tauri/resources/src-win.exe
-
       - name: Rust cache (Tauri App)
         uses: swatinem/rust-cache@v2
         with:
@@ -148,6 +137,11 @@ jobs:
     needs: build-tauri
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -157,9 +151,14 @@ jobs:
       - name: read version
         id: read_version
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(cat tauri-win-release/version.txt | tr -d '\r\n')
-          echo "version=$version" >> $GITHUB_ENV
+          set -euo pipefail
+          version=$(node scripts/release-version.mjs artifact tauri-win-release/version.txt)
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > release-versions.json
+          node scripts/release-version.mjs release release-versions.json
+          echo "version=$version" >> "$GITHUB_ENV"
 
       - name: prepare portable zip
         env:
@@ -192,22 +191,7 @@ jobs:
           fi
 
           cp "$NSIS_EXE" ./build/discord-quest-completer-setup.exe
-          SIGNATURE=$(cat "$NSIS_SIG")
-          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          cat > ./build/latest.json <<EOF
-          {
-            "version": "${{ env.version }}",
-            "notes": "See the release page for details.",
-            "pub_date": "$PUB_DATE",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "$SIGNATURE",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${{ env.version }}/discord-quest-completer-setup.exe"
-              }
-            }
-          }
-          EOF
+          node scripts/release-version.mjs manifest tauri-win-release/version.txt "$NSIS_SIG" build/latest.json
 
       - name: Create Build Artifacts
         uses: actions/upload-artifact@v4
@@ -226,7 +210,7 @@ jobs:
           tag_name: ${{ env.version }}
           name: Release ${{ env.version }}
           body: |
-            ![GitHub Downloads (specific asset, specific tag)](https://img.shields.io/github/downloads/volk-xp/Discord-quest-completer-by-Volk/${{ env.version }}/${{ env.win_build_release_dir }}.zip)
+            ![GitHub Downloads (specific asset, specific tag)](https://img.shields.io/github/downloads/volk-xp/Discord-quest-completer/${{ env.version }}/${{ env.win_build_release_dir }}.zip)
 
             #### Disclaimer
             This tool is intended for educational purposes and personal use. Please respect Discord's terms of service and game publishers' rights when using this application.  

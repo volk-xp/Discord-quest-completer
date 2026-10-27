@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Discord Quest Completer",
-  "version": "25.4.18",
+  "version": "../package.json",
   "identifier": "me.markterence.discordquestcompleter",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm version:check && pnpm sync:runner && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm version:check && pnpm sync:runner && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -28,12 +28,12 @@
       },
       "csp": {
         "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost https://github.com https://objects.githubusercontent.com", 
+        "connect-src": "ipc: http://ipc.localhost https://github.com https://objects.githubusercontent.com",
         "img-src": "'self' asset: http://asset.localhost blob: data:",
         "style-src": "'unsafe-inline' 'self'"
       }
     }
-  }, 
+  },
   "bundle": {
     "active": true,
     "targets": "all",
@@ -51,9 +51,10 @@
   },
   "plugins": {
     "updater": {
+      "allowDowngrades": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFEMUZFQUVGNTRDNEZENEQKUldSTi9jUlU3K29mSFhnWmVpRk5jeWxaL1lRQThJM29KcStTWHFPWHEwTmhaOXJVY0p1M01zYmcK",
       "endpoints": [
-        "https://github.com/volk-xp/Discord-quest-completer-by-Volk/releases/latest/download/latest.json"
+        "https://github.com/volk-xp/Discord-quest-completer/releases/latest/download/latest.json"
       ]
     }
   }

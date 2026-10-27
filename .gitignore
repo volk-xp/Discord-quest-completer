@@ -26,3 +26,10 @@ dist-ssr
 _target
 # Exclude binaries and executables these are built by the build process
 src-tauri/resources/*.exe
+# Local signing credentials
+.env
+.env.*
+*.key
+*.p12
+*.pfx
+*.pem

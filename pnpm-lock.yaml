@@ -24,8 +24,8 @@ dependencies:
     specifier: ^2.3.1
     version: 2.3.1
   '@tauri-apps/plugin-updater':
-    specifier: ^2.10.1
-    version: 2.10.1
+    specifier: ^2.12.0
+    version: 2.14.0
   '@vueuse/core':
     specifier: ^13.1.0
     version: 13.1.0(vue@3.5.13)
@@ -568,6 +568,10 @@ packages:
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
     dev: false
 
+  /@tauri-apps/api@2.12.4:
+    resolution: {integrity: sha512-pVmfis+4zT8H0Qhp3xPZx9Ju7kpzvA6rr/PSJPyuwfvucTQ8sVt61NYU9KMkK703UFlYadFmjKA4HhybOtN0gg==}
+    dev: false
+
   /@tauri-apps/api@2.8.0:
     resolution: {integrity: sha512-ga7zdhbS2GXOMTIZRT0mYjKJtR9fivsXzsyq5U3vjDL0s6DTMwYRm0UHNjzTY5dh4+LSC68Sm/7WEiimbQNYlw==}
     dev: false
@@ -713,10 +717,10 @@ packages:
       '@tauri-apps/api': 2.11.1
     dev: false
 
-  /@tauri-apps/plugin-updater@2.10.1:
-    resolution: {integrity: sha512-NFYMg+tWOZPJdzE/PpFj2qfqwAWwNS3kXrb1tm1gnBJ9mYzZ4WDRrwy8udzWoAnfGCHLuePNLY1WVCNHnh3eRA==}
+  /@tauri-apps/plugin-updater@2.14.0:
+    resolution: {integrity: sha512-gdylJ9tger4hkyOn24QZd6MNOKVo2Eh53iw5th2Qj1vKTR/+u4PIwJWuiis5hohYvobn6iOvlnALfrqIPSzh7Q==}
     dependencies:
-      '@tauri-apps/api': 2.11.1
+      '@tauri-apps/api': 2.12.4
     dev: false
 
   /@types/estree@1.0.6:

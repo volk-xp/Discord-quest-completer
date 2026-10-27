@@ -1,5 +1,5 @@
-use discord_sdk::activity::{ActivityBuilder, ActivityKind};
-use std::{fmt::Error, io::ErrorKind, ops::Deref};
+use discord_sdk::activity::ActivityBuilder;
+use crate::requests::RequestError;
 
 use crate::rpc::{self, Client};
 use serde::Deserialize;
@@ -29,19 +29,19 @@ fn to_app_id(app_id: &str) -> Result<u64, std::num::ParseIntError> {
     })
 }
 
-pub fn parse_activity_json(activity_json: &str) -> Result<ActivityParams, String> {
+pub fn parse_activity_json(activity_json: &str) -> Result<ActivityParams, RequestError> {
     serde_json::from_str(activity_json).map_err(|e| {
         eprintln!("Failed to parse activity JSON: {}", e);
-        format!("Failed to parse activity JSON: {}", e)
+        RequestError::new("invalid_input", format!("Failed to parse activity JSON: {}", e))
     })
 }
 
-pub fn create_activity(activity_json: String) -> Result<CreateActivityResult, String> {
+pub fn create_activity(activity_json: String) -> Result<CreateActivityResult, RequestError> {
     let activity: ActivityParams = parse_activity_json(&activity_json)?;
 
     let app_id: u64 = to_app_id(&activity.app_id).map_err(|e| {
         eprintln!("Failed to parse app_id: {}", e);
-        format!("Failed to parse app_id: {}", e)
+        RequestError::new("invalid_input", format!("Failed to parse app_id: {}", e))
     })?;
 
     let details = activity.details.unwrap_or_default();
@@ -95,17 +95,11 @@ pub fn create_activity(activity_json: String) -> Result<CreateActivityResult, St
     })
 }
 
-pub async fn set_activity(activity_json: String) -> Result<Client, String> {
-    let activity_result: CreateActivityResult = create_activity(activity_json)?;
-    let app_id: i64 = activity_result.app_id as i64;
-    let activity_builder = activity_result.activity;
-
-    let client = rpc::make_client(app_id, rpc::ds::Subscriptions::ACTIVITY).await;
-    client
-        .discord
-        .update_activity(activity_builder)
-        .await
-        .map_err(|e| format!("Failed to update activity: {}", e))?;
-
+pub async fn set_activity(activity_result: CreateActivityResult) -> Result<Client, RequestError> {
+    let app_id = i64::try_from(activity_result.app_id)
+        .ok().filter(|id| *id > 0)
+        .ok_or_else(|| RequestError::new("invalid_input", "Invalid Discord application ID"))?;
+    let client = rpc::make_client(app_id, rpc::ds::Subscriptions::ACTIVITY).await?;
+    client.update_activity(activity_result.activity).await?;
     Ok(client)
 }

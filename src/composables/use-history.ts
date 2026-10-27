@@ -10,11 +10,23 @@ export interface HistoryEntry {
 const HISTORY_KEY = 'dqc:history';
 const MAX_ENTRIES = 50;
 
+function isHistoryEntry(value: unknown): value is HistoryEntry {
+    if (!value || typeof value !== 'object') return false;
+    const entry = value as Partial<HistoryEntry>;
+    return typeof entry.id === 'string'
+        && typeof entry.gameName === 'string'
+        && (entry.action === 'launched' || entry.action === 'stopped'
+            || entry.action === 'rpc_connected' || entry.action === 'rpc_disconnected')
+        && typeof entry.timestamp === 'number' && Number.isFinite(entry.timestamp)
+        && entry.timestamp >= 0;
+}
+
 function loadHistory(): HistoryEntry[] {
     try {
         const raw = localStorage.getItem(HISTORY_KEY);
         if (!raw) return [];
-        return JSON.parse(raw) as HistoryEntry[];
+        const parsed: unknown = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(isHistoryEntry).slice(0, MAX_ENTRIES) : [];
     } catch {
         return [];
     }

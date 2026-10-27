@@ -1,171 +1,184 @@
 import { computed, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import type { Game, GameExecutable } from '@/types/types';
+import { gamePathPayload } from '@/utils/game-catalog';
+import { useGameList } from './use-game-list';
+import { useGlobalState } from './app-state';
+import { useHistory } from './use-history';
+import { useToasts } from './use-toasts';
+import { useUserPrefs } from './user-prefs';
 
-/**
- * A "play session" tracks one launched platform executable. It exists because
- * the two ways of telling Discord you are playing have opposite lifetimes:
- *
- *   Test RPC   -> open-ended. Rich Presence is pushed until the user hits
- *                 disconnect, so its clock counts up forever.
- *   Executable -> fixed window. Discord credits a quest after 15 minutes of
- *                 detected playtime, so there is no reason to leave the dummy
- *                 process running afterwards. We hold it for 16 minutes — a
- *                 full minute of margin over Discord's threshold to absorb
- *                 polling jitter — then close the window ourselves.
- *
- * Module-level singleton, matching the other composables in this folder, so the
- * countdown is readable from both HomeView (the big clock) and GameExecutables
- * (the per-row badge) without prop drilling or a new injection key.
- */
+// A local helper lifetime, independent of quest requirements or progress.
+// Native ownership enforces this deadline even without a live renderer.
 export const AUTO_STOP_MS = 16 * 60 * 1000;
 
 export interface PlaySession {
     key: string;
-    gameUid: string | undefined;
+    gameId: string;
     gameName: string;
     executableName: string;
+    launchId: string;
     startedAt: number;
     endsAt: number;
 }
 
-/**
- * Identity of a session. Keyed per executable, not per game, because a game can
- * have several platform executables running at once and each gets its own
- * independent window. NUL separates the parts so no executable path can forge a
- * collision. `uid` is optional on the Game type; the fallback keeps the writer
- * (HomeView) and the reader (GameExecutables) deriving the same key.
- */
-export function playSessionKey(gameUid: string | undefined, executableName: string) {
-    return `${gameUid ?? '-'}\u0000${executableName}`;
+interface NativeSession {
+    launch_id: string;
+    started_at: number;
+    ends_at: number;
+}
+
+export function playSessionKey(gameId: string | undefined, executableName: string) {
+    return `${gameId ?? '-'}\u0000${executableName.replace(/\\/g, '/').toLowerCase()}`;
 }
 
 const sessions = ref<PlaySession[]>([]);
-
-// Expiry callbacks are behaviour, not display state, so they live outside the
-// ref — Vue should not be walking functions with deep reactivity.
-const expiryHandlers = new Map<string, () => void>();
-
-// A single shared 1s tick drives every countdown rather than one interval per
-// session. Reading `now` is what makes remaining time reactive in templates.
+const currentlyPlaying = ref<string | null>(null);
+const stoppingLaunches = new Set<string>();
 const now = ref(Date.now());
 let ticker: ReturnType<typeof setInterval> | null = null;
+let checkingProcesses = false;
+const { gameList } = useGameList();
+const { addLog } = useGlobalState();
+const { addHistoryEntry } = useHistory();
+const { pushToast } = useToasts();
+const { notificationsEnabled } = useUserPrefs();
 
-function stopTicker() {
-    if (ticker) {
-        clearInterval(ticker);
-        ticker = null;
+function notify(type: 'success' | 'error' | 'info', message: string) {
+    if (notificationsEnabled.value) pushToast(type, message);
+}
+
+function updateRunningState(session: PlaySession, running: boolean) {
+    for (const game of gameList.value) {
+        if (game.id !== session.gameId) continue;
+        let matched = false;
+        for (const executable of game.executables) {
+            if (playSessionKey(game.id, executable.name) !== session.key) continue;
+            executable.is_running = running;
+            matched = true;
+        }
+        if (matched) game.is_running = game.executables.some(executable => executable.is_running);
+    }
+    if (!running && currentlyPlaying.value === session.gameId
+        && !sessions.value.some(item => item.gameId === session.gameId)
+        && !gameList.value.some(game => game.id === session.gameId && game.is_running)) {
+        currentlyPlaying.value = null;
     }
 }
 
-function sweep() {
-    now.value = Date.now();
-    const expired = sessions.value.filter(s => s.endsAt <= now.value);
-    for (const session of expired) {
-        // Drop the session *before* firing its handler. The handler runs the
-        // normal stop path, which calls endPlaySession() itself, and this makes
-        // that call a harmless no-op instead of a double fire.
-        sessions.value = sessions.value.filter(s => s.key !== session.key);
-        const handler = expiryHandlers.get(session.key);
-        expiryHandlers.delete(session.key);
-        handler?.();
+function finishSession(session: PlaySession, manual = false) {
+    if (!sessions.value.some(item => item.key === session.key && item.launchId === session.launchId)) return;
+    sessions.value = sessions.value.filter(item => item.key !== session.key);
+    updateRunningState(session, false);
+    if (sessions.value.length === 0 && ticker) {
+        clearInterval(ticker);
+        ticker = null;
     }
-    if (sessions.value.length === 0) {
-        stopTicker();
+    addLog('info', `Helper closed: ${session.gameName} (${session.executableName})`);
+    addHistoryEntry(session.gameName, 'stopped');
+    notify('info', manual ? `Stopped ${session.gameName}`
+        : `Helper closed for ${session.gameName}. Check quest progress in Discord.`);
+}
+
+async function syncExitedProcesses() {
+    if (checkingProcesses || sessions.value.length === 0) return;
+    checkingProcesses = true;
+    const checked = [...sessions.value];
+    try {
+        const running = new Map((await invoke<NativeSession[]>('running_processes'))
+            .map(session => [session.launch_id, session]));
+        for (const session of checked) {
+            const current = sessions.value.find(item => item.key === session.key);
+            if (current?.launchId !== session.launchId || stoppingLaunches.has(session.launchId)) continue;
+            const native = running.get(session.launchId);
+            if (!native) finishSession(session);
+            else {
+                current.startedAt = native.started_at;
+                current.endsAt = native.ends_at;
+                updateRunningState(current, true);
+            }
+        }
+    } catch (error) {
+        addLog('error', `Failed to check helper processes: ${String(error)}`);
+    } finally {
+        checkingProcesses = false;
     }
 }
 
 function startTicker() {
     if (ticker) return;
-    now.value = Date.now();
-    ticker = setInterval(sweep, 1000);
+    // Display and reconciliation only; native code owns all stop deadlines.
+    ticker = setInterval(() => {
+        now.value = Date.now();
+        void syncExitedProcesses();
+    }, 1000);
 }
 
-/**
- * Begin the auto-stop window for a launched executable. `onExpire` is invoked
- * once when the window closes; keeping it a callback leaves all Tauri calls and
- * user-facing messaging in HomeView where the rest of that logic lives.
- */
-function startPlaySession(opts: {
-    gameUid: string | undefined;
-    gameName: string;
-    executableName: string;
-    onExpire: () => void;
-}): PlaySession {
-    const key = playSessionKey(opts.gameUid, opts.executableName);
+async function startPlaySession({ game, executable }: { game: Game; executable: GameExecutable }): Promise<PlaySession> {
+    const key = playSessionKey(game.id, executable.name);
+    const launchId = await invoke<string>('run_background_process', {
+        name: game.name, ...gamePathPayload(game.id, executable),
+    });
+    const previous = sessions.value.find(session => session.key === key && session.launchId === launchId);
+    if (previous) {
+        updateRunningState(previous, true);
+        return previous;
+    }
     const startedAt = Date.now();
     const session: PlaySession = {
-        key,
-        gameUid: opts.gameUid,
-        gameName: opts.gameName,
-        executableName: opts.executableName,
-        startedAt,
-        endsAt: startedAt + AUTO_STOP_MS,
+        key, gameId: game.id, gameName: game.name, executableName: executable.name,
+        launchId, startedAt, endsAt: startedAt + AUTO_STOP_MS,
     };
-    // Relaunching the same executable restarts its window instead of stacking a
-    // second one that would fire against an already-closed process.
-    sessions.value = [...sessions.value.filter(s => s.key !== key), session];
-    expiryHandlers.set(key, opts.onExpire);
+    sessions.value = [...sessions.value.filter(item => item.key !== key), session];
+    updateRunningState(session, true);
+    currentlyPlaying.value = game.id;
+    now.value = startedAt;
     startTicker();
+    void syncExitedProcesses();
+    addHistoryEntry(game.name, 'launched');
+    notify('success', `Launched ${game.name}`);
     return session;
 }
 
-/**
- * Cancel a pending auto-stop. Called when the user stops an executable by hand,
- * so the timer cannot fire later against something already closed.
- */
-function endPlaySession(gameUid: string | undefined, executableName: string) {
-    const key = playSessionKey(gameUid, executableName);
-    sessions.value = sessions.value.filter(s => s.key !== key);
-    expiryHandlers.delete(key);
-    if (sessions.value.length === 0) {
-        stopTicker();
+async function stopPlaySession(game: Game, executable: GameExecutable, expectedLaunchId?: string): Promise<boolean> {
+    const session = sessions.value.find(item => item.key === playSessionKey(game.id, executable.name));
+    if (!session || (expectedLaunchId !== undefined && session.launchId !== expectedLaunchId)
+        || stoppingLaunches.has(session.launchId)) return false;
+    stoppingLaunches.add(session.launchId);
+    try {
+        await invoke('stop_process', { launch_id: session.launchId });
+        if (!sessions.value.some(item => item.key === session.key && item.launchId === session.launchId)) return false;
+        finishSession(session, true);
+        return true;
+    } catch (error) {
+        addLog('error', `Failed to stop ${game.name}: ${String(error)}`);
+        notify('error', `Failed to stop ${game.name}`);
+        return false;
+    } finally {
+        stoppingLaunches.delete(session.launchId);
     }
 }
 
-function clearPlaySessions() {
-    sessions.value = [];
-    expiryHandlers.clear();
-    stopTicker();
+function getPlaySession(gameId: string | undefined, executableName: string) {
+    return sessions.value.find(session => session.key === playSessionKey(gameId, executableName));
 }
 
-function getPlaySession(gameUid: string | undefined, executableName: string) {
-    const key = playSessionKey(gameUid, executableName);
-    return sessions.value.find(s => s.key === key);
-}
-
-/** Milliseconds left, clamped at zero. Reads `now`, so callers stay reactive. */
 function remainingMs(session: PlaySession | null | undefined) {
-    if (!session) return 0;
-    return Math.max(0, session.endsAt - now.value);
+    return session ? Math.max(0, session.endsAt - now.value) : 0;
 }
 
-/** mm:ss — the window is always under an hour, so an hours field is dead weight. */
 function formatCountdown(ms: number) {
-    const totalSeconds = Math.ceil(ms / 1000);
-    const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
-    const s = String(totalSeconds % 60).padStart(2, '0');
-    return `${m}:${s}`;
+    const seconds = Math.ceil(ms / 1000);
+    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-// The big clock has room for one number, so show whichever session expires
-// first — that is the next thing that will actually happen.
-const nextExpiringSession = computed<PlaySession | null>(() => {
-    if (sessions.value.length === 0) return null;
-    return [...sessions.value].sort((a, b) => a.endsAt - b.endsAt)[0];
-});
-
+const nextExpiringSession = computed<PlaySession | null>(() =>
+    [...sessions.value].sort((a, b) => a.endsAt - b.endsAt)[0] ?? null);
 const hasPlaySession = computed(() => sessions.value.length > 0);
 
 export function usePlaySessions() {
     return {
-        playSessions: sessions,
-        hasPlaySession,
-        nextExpiringSession,
-        startPlaySession,
-        endPlaySession,
-        clearPlaySessions,
-        getPlaySession,
-        remainingMs,
-        formatCountdown,
-        AUTO_STOP_MS,
+        playSessions: computed(() => sessions.value), currentlyPlaying, hasPlaySession, nextExpiringSession,
+        startPlaySession, stopPlaySession, getPlaySession, remainingMs, formatCountdown, AUTO_STOP_MS,
     };
 }

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "123",
+    "name": "CI Test Game",
+    "executables": [
+      {
+        "name": "game.exe",
+        "os": "win32",
+        "is_launcher": false
+      }
+    ]
+  }
+]

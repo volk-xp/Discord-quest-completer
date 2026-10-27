@@ -94,9 +94,9 @@ On your first launch, a short onboarding screen introduces the app. WebView2 is 
 4. Open **Discord Quest Completer**
 5. Use the search bar to find that exact game and add it to your list
 6. Select the game, then click **Play** — this launches the dummy executable that Discord detects as the real game running
-7. Leave both Discord and Discord Quest Completer open in the background for the full duration the quest requires
-8. Check the Quests tab — progress should update automatically as time passes
-9. Once complete, you can close the game from the app (Stop button) and claim your reward in Discord
+7. Check the quest's requirements and progress in Discord. This app does not read them or confirm completion.
+8. Each launched helper has a **local 16-minute auto-stop timer**. At zero, the app attempts to close that helper. The timer is independent of quest requirements and progress; a quest may require more time or different actions.
+9. If Discord shows that more eligible playtime is required, relaunch the helper as needed. Only claim a reward when Discord confirms completion.
 
 > **Note:** Not all quests can be completed this way. Some require actual gameplay actions (not just "time played") or streaming, which this method doesn't support.
 
@@ -154,6 +154,10 @@ Make sure Discord's own **"Display current activity as a status message"** setti
 Make sure [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2) is installed.
 
 ---
+
+## Windows Development
+
+See [Windows development and builds](docs/windows-development.md) for the tested helper preparation, development, and local build commands.
 
 ## Uninstalling
 

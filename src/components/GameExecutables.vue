@@ -27,7 +27,7 @@
                 <div class="justify-self-end flex items-center gap-2 shrink-0">
                     <span v-if="playSessionFor(executable)"
                         class="font-mono text-[9.5px] text-signal shrink-0"
-                        title="Time left before this window closes automatically">
+                        title="Local auto-stop timer; does not track quest progress or confirm completion">
                         {{ formatCountdown(remainingMs(playSessionFor(executable))) }}
                     </span>
                     <span class="flex items-center gap-1 font-display uppercase tracking-[0.12em] text-[8.5px]"
@@ -56,7 +56,7 @@
 <script setup lang="ts">
 import { EXECUTABLE_OS, GameActionsKey } from '@/constants/constants';
 import { GameActionsProvider, type Game, type GameExecutable } from '@/types/types';
-import { path, app } from '@tauri-apps/api';
+import { executableParts, launchExecutable } from '@/utils/game-catalog';
 import { computed, inject } from 'vue';
 import { usePlaySessions } from '@/composables/use-play-sessions';
 
@@ -77,14 +77,13 @@ const { getPlaySession, remainingMs, formatCountdown } = usePlaySessions();
 // Each launched executable runs its own auto-stop window, so the countdown is
 // looked up per row rather than read from a single shared session.
 function playSessionFor(executable: GameExecutable) {
-    return getPlaySession(props.game.uid, executable.name);
+    return getPlaySession(props.game.id, executable.name);
 }
 
 const filteredExecutables = computed(() => {
     return props.game.executables.filter(executable => {
         // currently no support for linux and darwin
-        return executable.os !== EXECUTABLE_OS.LINUX && executable.os !== EXECUTABLE_OS.DARWIN
-            && !isValidPath(executable.name);
+        return executable.os === EXECUTABLE_OS.WINDOWS && executableParts(executable.name) !== null;
     });
 });
 
@@ -100,60 +99,24 @@ function splitExecutableName(executable: GameExecutable) {
     ];
 }
 
-function getExecutablePath(executable: GameExecutable) {
-    const allSections = executable.name.split(/\\|\//);
-    const last = executable.name.split(/\\|\//).pop();
-    // remove file extension if there was none, just return the last section
-    const name = last?.split('.').slice(0, -1).join('.') || last;
-    return [
-        ...allSections.slice(0, -1)
-    ].join(path.sep())
-}
-
-function getFilename(executable: GameExecutable) {
-    const last = executable.name.split(/\\|\//).pop();
-    // remove file extension if there was none, just return the last section
-    return last;
-}
-
-function isValidPath(path: string) {
-    const illegalChars = ['>', '<', ':', '"', '|', '?', '*'];
-    return illegalChars.some(char => path.includes(char));
-}
-
 function handleLaunch(executable: GameExecutable) {
-    // Handle the launch logic here
-    console.log('Launching game:', props.game);
+    const validated = launchExecutable(executable);
+    if (!validated) return;
     if(executable.is_running) {
         emit('stop', {
             game: props.game,
-            executable: {
-                path: getExecutablePath(executable),
-                segments: splitExecutableName(executable).length,
-                filename: getFilename(executable),
-                ...executable
-            },
+            executable: validated,
         });
     } else {
         if (!gameActions?.isGameExecutableInstalled(executable)) {
             emit('install_and_play', {
                 game: props.game,
-                executable: {
-                    path: getExecutablePath(executable),
-                    segments: splitExecutableName(executable).length,
-                    filename: getFilename(executable),
-                    ...executable
-                },
+                executable: validated,
             });
         } else {
             emit('play', {
                 game: props.game,
-                executable: {
-                    path: getExecutablePath(executable),
-                    segments: splitExecutableName(executable).length,
-                    filename: getFilename(executable),
-                    ...executable
-                },
+                executable: validated,
             });
         }
      

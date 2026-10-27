@@ -2,13 +2,12 @@
 
 use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExA, DefWindowProcA, DispatchMessageA, GetClientRect, GetMessageA, GetWindowLongPtrA, PostQuitMessage, RegisterClassA, SetWindowLongPtrA, SetWindowPos, ShowWindow, TranslateMessage, CW_USEDEFAULT, GWL_EXSTYLE, HMENU, MSG, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COMMAND, WM_CTLCOLORSTATIC, WM_DESTROY, WM_SIZE, WNDCLASSA, WS_CHILD, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_OVERLAPPEDWINDOW, WS_VISIBLE
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, GetWindowLongPtrW, PostQuitMessage, RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, CW_USEDEFAULT, GWL_EXSTYLE, HMENU, MSG, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COMMAND, WM_CTLCOLORSTATIC, WM_DESTROY, WM_SIZE, WNDCLASSW, WS_CHILD, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_OVERLAPPEDWINDOW, WS_VISIBLE
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::Graphics::Gdi::{GetDC, GetStockObject, GetTextExtentPoint32A, ReleaseDC, SetBkMode, HDC, NULL_BRUSH, TRANSPARENT};
-use windows::Win32::System::LibraryLoader::{GetModuleHandleA};
-use windows::core::{PCSTR};
-use std::ffi::CString;
+use windows::Win32::Graphics::Gdi::{GetDC, GetStockObject, GetTextExtentPoint32W, ReleaseDC, SetBkMode, HDC, NULL_BRUSH, TRANSPARENT};
+use windows::Win32::System::LibraryLoader::{GetModuleHandleW};
+use windows::core::{w, HSTRING};
 use std::env;
 
 mod tray;
@@ -71,12 +70,12 @@ fn calculate_text_width(hwnd: HWND, text: &str) -> i32 {
             return 200; // fallback width
         }
         
-        let text_bytes = text.as_bytes();
+        let text_utf16: Vec<u16> = text.encode_utf16().collect();
         let mut size = SIZE::default();
         
-        let result = GetTextExtentPoint32A(
+        let result = GetTextExtentPoint32W(
             hdc,
-            text_bytes,
+            &text_utf16,
             &mut size
         );
         
@@ -93,14 +92,13 @@ fn calculate_text_width(hwnd: HWND, text: &str) -> i32 {
 
 fn create_label(parent_hwnd: HWND, text: &str, instance: HINSTANCE, x: i32, y:i32, w:Option<i32>, h:i32) -> Option<HWND> {
     unsafe {
-        let class_name = CString::new("STATIC").ok()?;
-        let window_text = CString::new(text).ok()?;
+        let window_text = HSTRING::from(text);
          // Calculate width dynamically if not provided
         let width = w.unwrap_or_else(|| calculate_text_width(parent_hwnd, text));
-        let label_hwnd: Result<HWND, windows::core::Error> = CreateWindowExA(
+        let label_hwnd: Result<HWND, windows::core::Error> = CreateWindowExW(
             WS_EX_TRANSPARENT, // Transparent background
-            PCSTR(class_name.as_ptr() as *const u8), // Class name
-            PCSTR(window_text.as_ptr() as *const u8), // Window text
+            w!("STATIC"), // Class name
+            &window_text, // Window text
             WS_CHILD | WS_VISIBLE, // Basic window style
             x,  // x position
             y,  // y position
@@ -121,13 +119,12 @@ fn create_label(parent_hwnd: HWND, text: &str, instance: HINSTANCE, x: i32, y:i3
 
 fn create_link_label(parent_hwnd: HWND, text: &str, instance: HINSTANCE) -> Option<HWND> {
     unsafe {
-        let class_name = CString::new("BUTTON").ok()?;
-        let window_text = CString::new(text).ok()?;
+        let window_text = HSTRING::from(text);
         
-        let label_hwnd = CreateWindowExA(
+        let label_hwnd = CreateWindowExW(
             WS_EX_TRANSPARENT, // Transparent background
-            PCSTR(class_name.as_ptr() as *const u8), // Class name
-            PCSTR(window_text.as_ptr() as *const u8), // Window text
+            w!("BUTTON"), // Class name
+            &window_text, // Window text
             WS_CHILD | WS_VISIBLE | WINDOW_STYLE(0x00000000), // BS_PUSHBUTTON style
             10,    // x position (will be updated)
             HEIGHT - 80, // y position (bottom-left, 40 pixels from bottom)
@@ -188,7 +185,7 @@ unsafe extern "system" fn window_proc(
         WM_SIZE => {
             // Reposition the link label when window is resized
             position_link_label(hwnd);
-            DefWindowProcA(hwnd, msg, wparam, lparam)
+            DefWindowProcW(hwnd, msg, wparam, lparam)
         } 
         WM_COMMAND => { 
             let control_id = wparam.0 & 0xFFFF;
@@ -206,35 +203,35 @@ unsafe extern "system" fn window_proc(
             }
             LRESULT(0)
         } 
-        _ => DefWindowProcA(hwnd, msg, wparam, lparam),
+        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
 
 fn create_native_window(title: &str) -> Result<(HWND, HINSTANCE), Box<dyn std::error::Error>> {
     unsafe {
-        let instance = GetModuleHandleA(None)?;
-        let class_name = CString::new("DiscordQuestCompleter")?;
-        let window_title = CString::new(title)?;
+        let instance = GetModuleHandleW(None)?;
+        let class_name = w!("DiscordQuestCompleter");
+        let window_title = HSTRING::from(title);
 
         // Create a white background brush
         let brush = windows::Win32::Graphics::Gdi::CreateSolidBrush(
             COLORREF(0x00FFFFFF) // White
         );
 
-        let wc = WNDCLASSA {
+        let wc = WNDCLASSW {
             lpfnWndProc: Some(window_proc),
             hInstance: HINSTANCE(instance.0),
-            lpszClassName: PCSTR(class_name.as_ptr() as *const u8),
+            lpszClassName: class_name,
             hbrBackground: brush, // Set background brush
             ..Default::default()
         };
 
-        RegisterClassA(&wc);
+        RegisterClassW(&wc);
 
-        let hwnd = CreateWindowExA(
+        let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE(0),
-            PCSTR(class_name.as_ptr() as *const u8),
-            PCSTR(window_title.as_ptr() as *const u8),
+            class_name,
+            &window_title,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -303,13 +300,13 @@ fn main() {
     unsafe { 
         if config.start_minimized {
             // Only modify window styles when starting minimized
-            let ex_style = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+            let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
             let new_ex_style = (ex_style & !WS_EX_APPWINDOW.0 as isize) |
                 WS_EX_TOOLWINDOW.0 as isize | // Make the window a tool window (so it doesn't show in the taskbar)
                 WS_EX_TRANSPARENT.0 as isize | // Make the window transparent
                 WS_EX_LAYERED.0 as isize; // WS_EX_LAYERED make the window layered (for transparency)
             
-            SetWindowLongPtrA(hwnd, GWL_EXSTYLE, new_ex_style);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style);
             let _ = ShowWindow(hwnd, SW_HIDE);
         } else {
             // For normal window, just show it without modifying styles
@@ -327,35 +324,58 @@ fn main() {
 
                 if event.id == show_i.id() {
                     // Always restore window styles for normal display when showing from tray
-                    let ex_style = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+                    let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
                     let new_ex_style = (ex_style & !(WS_EX_TOOLWINDOW.0 as isize | WS_EX_TRANSPARENT.0 as isize | WS_EX_LAYERED.0 as isize)) |
                         WS_EX_APPWINDOW.0 as isize; // Restore WS_EX_APPWINDOW to show in taskbar
                     
-                    SetWindowLongPtrA(hwnd, GWL_EXSTYLE, new_ex_style);
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style);
                     let _ = ShowWindow(hwnd, SW_SHOWNORMAL);
                     let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd);
                 }
 
                 if event.id == hide_i.id() {
                     // Hide window to tray (similar to --tray startup behavior)
-                    let ex_style = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+                    let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
                     let new_ex_style = (ex_style & !WS_EX_APPWINDOW.0 as isize) |
                         WS_EX_TOOLWINDOW.0 as isize | // Make the window a tool window (so it doesn't show in the taskbar)
                         WS_EX_TRANSPARENT.0 as isize | // Make the window transparent
                         WS_EX_LAYERED.0 as isize; // WS_EX_LAYERED make the window layered (for transparency)
                     
-                    SetWindowLongPtrA(hwnd, GWL_EXSTYLE, new_ex_style);
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style);
                     let _ = ShowWindow(hwnd, SW_HIDE);
                 }
             }
 
-            let ret = GetMessageA(&mut msg, None, 0, 0);
+            let ret = GetMessageW(&mut msg, None, 0, 0);
             if ret.0 == 0 || ret.0 == -1 {
                 break;
             }
             
             let _ = TranslateMessage(&msg);
-            DispatchMessageA(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, GetWindowTextW, IsWindowUnicode};
+
+    #[test]
+    fn non_ascii_titles_and_labels_round_trip_through_windows() {
+        let title = "Quête — 日本語 — Привет — 🎮";
+        let (hwnd, instance) = create_native_window(title).unwrap();
+        let label = create_label(hwnd, title, instance, 10, 40, None, 20).unwrap();
+        let button = create_link_label(hwnd, title, instance).unwrap();
+        unsafe {
+            for window in [hwnd, label, button] {
+                assert!(IsWindowUnicode(window).as_bool());
+                let mut buffer = [0u16; 256];
+                let length = GetWindowTextW(window, &mut buffer) as usize;
+                assert_eq!(String::from_utf16(&buffer[..length]).unwrap(), title);
+            }
+            DestroyWindow(hwnd).unwrap();
         }
     }
 }

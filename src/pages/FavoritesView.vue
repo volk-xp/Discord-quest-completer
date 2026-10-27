@@ -30,10 +30,10 @@ function playFavorite(game: Game) {
         </div>
 
         <div v-else class="space-y-3">
-            <div v-for="game in favoriteGames" :key="game.uid"
+            <div v-for="game in favoriteGames" :key="game.id"
                 class="bg-white/85 dark:bg-slate-900/40 backdrop-blur-md border border-transparent dark:border-cyan-900/40 rounded-lg p-4 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <button @click="removeFavorite(game.uid)" class="text-2xl leading-none text-amber-400 hover:scale-110 transition-transform" title="Remove from favorites">
+                    <button @click="removeFavorite(game.id)" class="text-2xl leading-none text-amber-400 hover:scale-110 transition-transform" title="Remove from favorites">
                         ★
                     </button>
                     <div class="font-medium text-gray-800 dark:text-white">{{ game.name }}</div>

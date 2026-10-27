@@ -1,6 +1,8 @@
 import { createGlobalState } from '@vueuse/core'
 import { computed, ComputedRef, Ref, ShallowRef, shallowRef } from 'vue'
 
+const MAX_LOG_ENTRIES = 500;
+
 export const Pages = {
     HOME: 'home',
     PLAYGROUND: 'playground',
@@ -54,7 +56,7 @@ export const useGlobalState = createGlobalState(
         type = 'info';
       }
       const formattedLog = `${newLog}`;
-      logs.value.push({ type: type as 'info' | 'error' | 'warning' | 'debug', message: formattedLog, timestamp: new Date() });
+      logs.value = [...logs.value, { type: type as AppLogObject['type'], message: formattedLog, timestamp: new Date() }].slice(-MAX_LOG_ENTRIES);
     }
 
     function clearLogs() {

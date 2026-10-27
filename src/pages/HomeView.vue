@@ -10,8 +10,7 @@ import IconVerified from '@/components/IconVerified.vue';
 import { isEmpty } from 'lodash-es';
 import GameExecutables from '@/components/GameExecutables.vue';
 import { GameActionsKey, EXECUTABLE_OS } from '@/constants/constants';
-import { path } from '@tauri-apps/api';
-import { emit } from '@tauri-apps/api/event';
+import { executableParts, gamePathPayload, launchExecutable } from '@/utils/game-catalog';
 import { useFetchGameList } from '@/composables/fetch-gamelist';
 import { UseFuseOptions } from '@vueuse/integrations';
 import Fuse from 'fuse.js';
@@ -45,6 +44,7 @@ const {
     isReadyBundled,
     isReadyDiscord,
     allFetchDone,
+    fetchOutcome,
 } = useFetchGameList()
 const { addLog, setPage } = useGlobalState();
 const shouldShowNotificationContainer = computed(() => {
@@ -57,15 +57,16 @@ const searchResultContainerRef = useTemplateRef<HTMLElement>('searchResultContai
 const dialogMessage = ref('');
 const isDialogOpen = ref(false);
 const dialogKey = ref<DialogKey>('none')
-const { isConnectedToRPC, isConnecting, sessionElapsed } = useRpcState();
+const { isConnectedToRPC, isConnecting, isDisconnecting, rpcError, sessionElapsed, connectRpc, disconnectRpc } = useRpcState();
 // Launched executables are time-boxed; Test RPC is not. See use-play-sessions.ts.
 const {
     playSessions,
     hasPlaySession,
     nextExpiringSession,
+    currentlyPlaying,
     startPlaySession,
-    endPlaySession,
-    clearPlaySessions,
+    stopPlaySession,
+    getPlaySession,
     remainingMs,
     formatCountdown,
     AUTO_STOP_MS,
@@ -115,11 +116,11 @@ function stopSessionTimer() {
 // Games are ordered directly in gameList.value. Favoriting regroups them;
 // the up/down arrow buttons let the user manually reorder within that.
 function handleToggleFavorite(game: Game) {
-    if (!game?.uid) return;
+    if (!game?.id) return;
     toggleFavoriteGame(game);
     // Regroup: favorites first (preserving their relative order), then the rest
-    const favs = gameList.value.filter(g => isFavorite(g.uid));
-    const rest = gameList.value.filter(g => !isFavorite(g.uid));
+    const favs = gameList.value.filter(g => isFavorite(g.id));
+    const rest = gameList.value.filter(g => !isFavorite(g.id));
     gameList.value = [...favs, ...rest];
 }
 
@@ -143,10 +144,6 @@ const debouncedSearchQuery = refDebounced(searchQuery, 300)
 
 const searchResultsIsOpen = ref(false);
 const isOnSearchResults = ref(false);
-
-// Game status
-const currentlyPlaying = ref<string | null>(null);
-
 
 onClickOutside(searchResultContainerRef, () => {
     searchResultsIsOpen.value = false;
@@ -196,7 +193,10 @@ let hasNotifiedFetchDone = false;
 watch(allFetchDone, (done) => {
     if (done && !hasNotifiedFetchDone) {
         hasNotifiedFetchDone = true;
-        notify('success', 'Game list refreshed');
+        if (fetchOutcome.value === 'fresh') notify('success', 'Game list refreshed');
+        else if (fetchOutcome.value === 'cached') notify('info', 'Using cached game list');
+        else if (fetchOutcome.value === 'bundled') notify('info', 'Using bundled game list');
+        else if (fetchOutcome.value === 'failed') notify('error', 'No usable game list is available');
     } else if (!done) {
         hasNotifiedFetchDone = false;
     }
@@ -209,14 +209,14 @@ function handleFocusSearchEvent() {
 
 function handleSelectFavoriteGame(e: Event) {
     const game = (e as CustomEvent<Game>).detail;
-    if (!game?.uid) return;
-    let found = gameList.value.find(g => g.uid === game.uid);
+    if (!game?.id) return;
+    let found = gameList.value.find(g => g.id === game.id);
     if (!found) {
         // The favorited game isn't currently in Home's session list
         // (e.g. it was removed, or the app was just restarted) — add it
         // back so Play works seamlessly regardless.
-        gameList.value = [...gameList.value, game];
-        found = game;
+        found = createRuntimeGame(game);
+        gameList.value = [...gameList.value, found];
     }
     selectGame(found);
     // Prefer directly launching a win32 executable over requiring the user
@@ -233,10 +233,7 @@ onUnmounted(() => {
     if (sessionTimerInterval) {
         clearInterval(sessionTimerInterval);
     }
-    // Mirrors the line above: don't leave the countdown interval running behind a
-    // torn-down view. In practice pages here are v-show'd rather than unmounted,
-    // so this only matters for hot reload and app teardown.
-    clearPlaySessions();
+    // Helper ownership and deadlines belong to the shared session manager.
     window.removeEventListener('dqc:focus-search', handleFocusSearchEvent);
     window.removeEventListener('dqc:select-game', handleSelectFavoriteGame);
 });
@@ -260,13 +257,25 @@ function openSearchResults() {
     searchResultsIsOpen.value = true;
 }
 
+function createRuntimeGame(game: Game): Game {
+    const executables = game.executables.map(executable => ({
+        ...executable,
+        is_installed: false,
+        is_running: !!getPlaySession(game.id, executable.name),
+    }));
+    return {
+        ...game,
+        uid: randomString(),
+        executables,
+        is_installed: false,
+        is_running: executables.some(executable => executable.is_running),
+    };
+}
+
 // Function to add a game to the selected list
 function addGameToList(game: Game) {
     if (!gameList.value.some(g => g.id === game.id)) {
-        gameList.value.push({
-            uid: randomString(),
-            ...game
-        });
+        gameList.value.push(createRuntimeGame(game));
     }
 
     closeSearchResults();
@@ -340,12 +349,7 @@ async function createDummyGame(game: Game | null, executable: GameExecutable) {
     const gameToInstall = gameList.value.find(g => g.uid === gameUid);
     const executableItem = gameToInstall?.executables.find(exe => exe.name === executable.name);
     if (gameToInstall && executableItem) {
-        const payload =  { 
-            path: executable.path,
-            executable_name: executable.filename,
-            path_len: executable.segments,
-            app_id: Number(gameToInstall.id),
-        }
+        const payload = gamePathPayload(gameToInstall.id, executable);
         console.log(payload);
         const result = await invoke('create_fake_game', payload)
         console.log('Game created:', result);
@@ -360,86 +364,31 @@ async function installAndPlay({game, executable}: {game: Game, executable: GameE
     if (!game) {
         return;
     }
-    const gameCreated = await createDummyGame(game, executable);
-    if (gameCreated) {
-        playGame({game, executable});
-    } else {
-        console.error('Failed to create game');
-        addLog('error', 'Failed to create game');
+    try {
+        const gameCreated = await createDummyGame(game, executable);
+        if (gameCreated) {
+            await playGame({game, executable});
+        } else {
+            throw new Error('Game or executable is no longer available.');
+        }
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        addLog('error', `Failed to create game: ${reason}`);
+        notify('error', `Failed to prepare ${game.name}: ${reason}`);
     }
 }
 // Play game function
 async function playGame({game, executable}: {game: Game, executable: GameExecutable}) {
-    if (!game) {
-        return;
-    }
-    const gameUid = game.uid;
+    if (!game) return;
+    const gameToPlay = gameList.value.find(item => item.uid === game.uid);
+    const executableItem = gameToPlay?.executables.find(item => item.name === executable.name);
+    if (!gameToPlay || !executableItem) return;
     try {
-        console.log(`Playing game: ${gameUid}`);
-        addLog('info', `Playing game: ${game.name}`);
-        addLog('info', `Executable: ${executable.name}`);
-        currentlyPlaying.value = game.id;
-        // find the game in the list
-        const gameToPlay = gameList.value.find(g => g.uid === gameUid);
-        const executableItem = gameToPlay?.executables.find(exe => exe.name === executable.name);
-        if (gameToPlay && executableItem) {
-            const payload =  { 
-                name: game.name,
-                path: executable.path,
-                executable_name: executable.filename,
-                path_len: executable.segments,
-                app_id: Number(gameToPlay.id),
-                exec_path: path.join(executable.path!, executable.filename!),
-            } 
-            await invoke('run_background_process', payload);
-            gameToPlay.is_running = true;
-            executableItem.is_running = true;
-            notify('success', `Launched ${game.name}`);
-            addHistoryEntry(game.name, 'launched');
-            // Time-box it. Discord needs roughly 15 minutes of detected playtime
-            // to credit a quest, so there is nothing to gain by leaving the dummy
-            // process running past that — we close it ourselves when the window
-            // ends. Each executable gets its own independent countdown, and the
-            // Test RPC path deliberately stays open-ended instead.
-            startPlaySession({
-                gameUid,
-                gameName: game.name,
-                executableName: executable.name,
-                onExpire: () => {
-                    autoStopExecutable(game, executable);
-                },
-            });
-        }
-        // In a real app, this would invoke a Tauri command to launch the game
-       
+        await startPlaySession({ game: gameToPlay, executable: executableItem });
     } catch (error) {
-        console.error('Failed to launch game:', error);
+        addLog('error', `Failed to launch game: ${String(error)}`);
         notify('error', `Failed to launch ${game.name}`);
     }
-}
-
-// Path-building helpers, mirroring the same logic used in GameExecutables.vue,
-// needed here so auto-play (triggered from the Favorites tab) can launch a
-// win32 executable without requiring the user to open that component's UI.
-function isValidExecutablePath(name: string) {
-    const illegalChars = ['>', '<', ':', '"', '|', '?', '*'];
-    return !illegalChars.some(char => name.includes(char));
-}
-
-function splitExecutableName(name: string) {
-    const allSections = name.split(/\\|\//);
-    const last = name.split(/\\|\//).pop();
-    const trimmed = last?.split('.').slice(0, -1).join('.') || last;
-    return [...allSections.slice(0, -1), trimmed];
-}
-
-function getExecutablePath(name: string) {
-    const allSections = name.split(/\\|\//);
-    return allSections.slice(0, -1).join(path.sep());
-}
-
-function getFilename(name: string) {
-    return name.split(/\\|\//).pop();
 }
 
 // Auto-play: used when launching a game from the Favorites tab. If the game
@@ -448,7 +397,7 @@ function getFilename(name: string) {
 // use Test RPC. Returns true if it found and launched something.
 async function autoPlayFavorite(game: Game): Promise<boolean> {
     const win32Exe = game.executables?.find(exe =>
-        exe.os === EXECUTABLE_OS.WINDOWS && isValidExecutablePath(exe.name)
+        exe.os === EXECUTABLE_OS.WINDOWS && executableParts(exe.name) !== null
     );
     if (!win32Exe) {
         return false;
@@ -458,14 +407,9 @@ async function autoPlayFavorite(game: Game): Promise<boolean> {
         return true;
     }
 
-    const executable: GameExecutable = {
-        ...win32Exe,
-        path: getExecutablePath(win32Exe.name),
-        segments: splitExecutableName(win32Exe.name).length,
-        filename: getFilename(win32Exe.name),
-    };
+    const executable = launchExecutable(win32Exe)!;
 
-    if (!isGameExecutableInstalled(executable)) {
+    if (!isGameExecutableInstalled(win32Exe)) {
         await installAndPlay({ game, executable });
     } else {
         await playGame({ game, executable });
@@ -473,118 +417,59 @@ async function autoPlayFavorite(game: Game): Promise<boolean> {
     return true;
 }
 
-// Fired by the play-session timer when an executable's window runs out. It goes
-// through the same teardown as a manual stop so process state, history and logs
-// stay consistent — only the wording the user sees differs.
-async function autoStopExecutable(game: Game, executable: GameExecutable) {
-    addLog('info', `Auto-stop window reached for ${game.name} (${formatCountdown(AUTO_STOP_MS)})`);
-    await stopPlaying({ game, executable }, true);
-}
-
 // Stop playing
-async function stopPlaying({game, executable}: {game: Game, executable: GameExecutable}, auto = false) {
-    if (!game) {
-        return;
-    }
-    console.log('Stopped playing game');
-    const gameUid = game.uid;
-
-    currentlyPlaying.value = null;
-
-    // Cancel any pending auto-stop for this executable. Without this, a manual
-    // stop would leave the timer armed and it would later fire against a process
-    // that is already gone. Harmless no-op when the timer is what called us.
-    endPlaySession(gameUid, executable.name);
-
-    const gameToPlay = gameList.value.find(g => g.uid === gameUid);
-    const executableItem = gameToPlay?.executables.find(exe => exe.name === executable.name);
-    if (gameToPlay && executableItem) {
-        try {
-            await invoke('stop_process', {
-                exec_name: executable.filename!
-            })
-            addLog('info', `Stopped game process: ${game.name}`);
-            addLog('info', `Stopped Executable: ${executable.name}`);
-            notify('info', auto
-                ? `Closed ${game.name} after ${formatCountdown(AUTO_STOP_MS)}`
-                : `Stopped ${game.name}`);
-            addHistoryEntry(game.name, 'stopped');
-        } catch (error) {
-            console.error('Failed to stop game process:', error);
-            const errorMessage = (error instanceof Error) ? error.message : String(error);
-            addLog('error', 'Failed to stop game process' + errorMessage);
-            notify('error', `Failed to stop ${game.name}`);
-            // Even if stopping fails, we still update the state
-            gameToPlay.is_running = false;
-            executableItem.is_running = false;
-        } finally {
-            gameToPlay.is_running = false;
-            executableItem.is_running = false;
-        }
-    }
+async function stopPlaying({game, executable}: {game: Game, executable: GameExecutable}) {
+    if (game) await stopPlaySession(game, executable);
 }
 
 function getExecutables(game: Game) {
     return game.executables.map(exe => exe.name)
 }
 
-async function handleTestRPC(game: Game | null) {
-    let state = isConnectedToRPC.value ? 'disconnect' : 'connect';
+let rpcGame: Game | null = null;
 
-    console.log('Testing RPC for game:', game);
-    if (!game && state === 'connect') {
-        showDialog('no_game_selected');
+watch(isConnectedToRPC, connected => {
+    if (connected) return;
+    stopSessionTimer();
+    if (rpcGame) {
+        rpcGame.is_running = rpcGame.executables.some(exe => exe.is_running);
+        if (currentlyPlaying.value === rpcGame.id && !rpcGame.is_running) currentlyPlaying.value = null;
+        rpcGame = null;
+    }
+});
+
+watch(rpcError, error => {
+    if (error) {
+        addLog('error', `Discord RPC: ${error}`);
+        notify('error', `Discord RPC: ${error}`);
+    }
+});
+
+async function handleTestRPC(game: Game | null) {
+    if (isDisconnecting.value) return;
+    if (isConnectedToRPC.value || isConnecting.value) {
+        const gameName = rpcGame?.name;
+        if (await disconnectRpc()) {
+            notify('info', 'Disconnected from Discord Rich Presence');
+            if (gameName) addHistoryEntry(gameName, 'rpc_disconnected');
+        }
         return;
     }
-    if (state === 'disconnect' || isConnecting.value) {
-        // await invoke('connect_to_discord_rpc_2', { app_id: "0", discord_state: "disconnect" })
-        // invoke('connect_to_discord_rpc_3', {
-        //     activity_json: JSON.stringify({
-        //         app_id: selectedGame.value?.id
-        //     }),
-        //     action: 'disconnect',
-        // })
-        emit('event_disconnect');
-        
-        isConnectedToRPC.value = false;
-        notify('info', `Disconnected from Discord Rich Presence`);
-        addHistoryEntry(game!.name, 'rpc_disconnected');
-        game!.is_running = false;
-        currentlyPlaying.value = null;
-        isConnecting.value = false;
-        stopSessionTimer();
-        return;
-    }
-    showDialog('rpc_message_1');
+    showDialog(game ? 'rpc_message_1' : 'no_game_selected');
 }
 
 async function continueRPCRisk(game: Game | null) {
-    if (!game) {
-        return;
-    }
-    const gameUid = game.uid;
-    const gameToTest = gameList.value.find(g => g.uid === gameUid);
-    if (gameToTest) {
-        console.log('Testing RPC for game:', gameToTest);
-        isConnecting.value = true;
-        // invoke('connect_to_discord_rpc_2', { app_id: gameToTest.id, discord_state: "connect" })
-        invoke('connect_to_discord_rpc_3', {
-            activity_json: JSON.stringify({
-                app_id: gameToTest.id,
-            }),
-            action: 'connect',
-        })
-        .then(() => {
-            isConnectedToRPC.value = true;
-            gameToTest.is_running = true;
-            currentlyPlaying.value = gameToTest.id;
-            isConnecting.value = false;
-            startSessionTimer();
-            notify('success', `Connected to Discord Rich Presence — ${gameToTest.name}`);
-            addHistoryEntry(gameToTest.name, 'rpc_connected');
-        })
-
-        hideDialog();
+    if (!game) return;
+    const gameToTest = gameList.value.find(g => g.uid === game.uid);
+    if (!gameToTest) return;
+    hideDialog();
+    if (await connectRpc({ app_id: gameToTest.id })) {
+        rpcGame = gameToTest;
+        gameToTest.is_running = true;
+        currentlyPlaying.value = gameToTest.id;
+        startSessionTimer();
+        notify('success', `Connected to Discord Rich Presence — ${gameToTest.name}`);
+        addHistoryEntry(gameToTest.name, 'rpc_connected');
     }
 }
 
@@ -897,10 +782,10 @@ provide<GameActionsProvider>(GameActionsKey, {
                             <!-- row controls -->
                             <div class="flex items-center gap-0.5 shrink-0">
                                 <button @click.stop="handleToggleFavorite(game)"
-                                    :title="isFavorite(game.uid) ? 'Remove from favorites' : 'Add to favorites'"
+                                    :title="isFavorite(game.id) ? 'Remove from favorites' : 'Add to favorites'"
                                     class="grid place-items-center h-5 w-5 rounded text-[13px] leading-none transition-transform hover:scale-110"
-                                    :class="isFavorite(game.uid) ? 'text-signal' : 'text-ink-faint hover:text-signal'">
-                                    {{ isFavorite(game.uid) ? '★' : '☆' }}
+                                    :class="isFavorite(game.id) ? 'text-signal' : 'text-ink-faint hover:text-signal'">
+                                    {{ isFavorite(game.id) ? '★' : '☆' }}
                                 </button>
 
                                 <div class="flex flex-col">
@@ -939,7 +824,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                 <div class="flex items-center gap-1.5 shrink-0">
                     <span class="h-1.5 w-1.5 rounded-full" :class="isConnectedToRPC ? 'bg-live animate-pulse' : 'bg-ink-faint/50'"></span>
                     <span class="eyebrow" :class="isConnectedToRPC ? 'text-live' : ''">
-                        {{ isConnectedToRPC ? 'Rich presence live' : 'Not connected' }}
+                        {{ isDisconnecting ? 'Disconnecting…' : isConnecting ? 'Connecting…' : isConnectedToRPC ? 'Rich presence live' : 'Not connected' }}
                     </span>
                 </div>
             </div>
@@ -950,7 +835,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                     <div class="min-w-0">
                         <div class="eyebrow" :class="hasPlaySession || isConnectedToRPC ? 'text-signal' : ''">
                             {{ hasPlaySession
-                                ? 'Playing · auto-stop'
+                                ? 'Local auto-stop timer'
                                 : (isConnectedToRPC ? 'Session running' : (selectedGame ? 'Ready' : 'No game selected')) }}
                         </div>
                         <div class="mt-2 text-[13px] truncate" :class="selectedGame || hasPlaySession ? 'text-ink' : 'text-ink-faint'">
@@ -965,19 +850,19 @@ provide<GameActionsProvider>(GameActionsKey, {
                                 : (isConnectedToRPC ? sessionElapsed : '00:00:00') }}
                         </div>
                         <p class="mt-3 text-[11.5px] leading-relaxed text-ink-dim max-w-[52ch]">
-                            <span v-if="hasPlaySession">Counting down to auto-stop. The launched window closes on its own at zero — {{ formatCountdown(AUTO_STOP_MS) }} per executable.</span>
-                            <span v-else-if="isConnectedToRPC">Discord is counting this as playtime. Keep the app open.</span>
+                            <span v-if="hasPlaySession">Local {{ formatCountdown(AUTO_STOP_MS) }} timer per executable. At zero, the app attempts to close the helper. Quest requirements and progress are not tracked. Check completion in Discord.</span>
+                            <span v-else-if="isConnectedToRPC">Rich Presence is connected. This app does not track quest progress or confirm completion. Check Discord.</span>
                             <span v-else-if="selectedGame">Nothing is being sent yet. Connect to start the clock.</span>
                             <span v-else>Add a game, then select it to send Rich Presence.</span>
                         </p>
                     </div>
 
-                    <button @click="handleTestRPC(selectedGame)"
+                    <button @click="handleTestRPC(selectedGame)" :disabled="isDisconnecting"
                         class="shrink-0 font-display uppercase tracking-[0.14em] text-[10px] rounded-[6px] px-4 py-2.5 transition-colors"
                         :class="isConnecting || isConnectedToRPC
                             ? 'border border-alert/50 text-alert hover:bg-alert/10'
                             : 'bg-signal text-deck-950 hover:bg-signal/85'">
-                        {{ isConnecting || isConnectedToRPC ? 'Disconnect to Discord Gateway' : 'Test RPC' }}
+                        {{ isDisconnecting ? 'Disconnecting…' : isConnecting ? 'Cancel connection' : isConnectedToRPC ? 'Disconnect from Discord' : 'Test RPC' }}
                     </button>
                 </div>
 
@@ -994,7 +879,7 @@ provide<GameActionsProvider>(GameActionsKey, {
                         class="flex items-center gap-2 text-[11px] bg-signal/[0.06] border border-signal/25 rounded-[6px] px-3 py-2">
                         <span class="w-1.5 h-1.5 rounded-full bg-signal animate-pulse shrink-0"></span>
                         <span class="font-mono text-[10.5px] text-ink-dim truncate min-w-0">{{ session.executableName }}</span>
-                        <span class="ml-auto shrink-0 text-ink-faint">closes in</span>
+                        <span class="ml-auto shrink-0 text-ink-faint">local timer</span>
                         <span class="font-mono text-signal shrink-0">{{ formatCountdown(remainingMs(session)) }}</span>
                     </div>
                 </div>
