@@ -117,11 +117,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path staging/bundle | Out-Null
           New-Item -ItemType Directory -Force -Path staging/data | Out-Null
-          New-Item -ItemType Directory -Force -Path staging/resources | Out-Null
           Copy-Item src-tauri/target/release/discord-quest-completer.exe staging/
           Copy-Item -Recurse -Force src-tauri/target/release/bundle/* staging/bundle/
           Copy-Item -Recurse -Force src-tauri/target/release/data/* staging/data/
-          Copy-Item -Recurse -Force src-tauri/target/release/resources/* staging/resources/
           Copy-Item version.txt staging/
           Write-Host "--- Staged contents ---"
           Get-ChildItem -Recurse staging
@@ -168,7 +166,6 @@ jobs:
           mkdir -p ./build/${{ env.win_build_release_dir }}
           cp tauri-win-release/discord-quest-completer.exe ./build/${{ env.win_build_release_dir }}/
           cp -r tauri-win-release/data/ ./build/${{ env.win_build_release_dir }}/
-          cp -r tauri-win-release/resources/ ./build/${{ env.win_build_release_dir }}/
           zip -r ./build/${{ env.win_build_release_dir }}.zip ./build/${{ env.win_build_release_dir }}
           echo "win_build_release_dir=${{ env.win_build_release_dir }}" >> $GITHUB_ENV
 
@@ -209,15 +206,7 @@ jobs:
         with:
           tag_name: ${{ env.version }}
           name: Release ${{ env.version }}
-          body: |
-            ![GitHub Downloads (specific asset, specific tag)](https://img.shields.io/github/downloads/volk-xp/Discord-quest-completer/${{ env.version }}/${{ env.win_build_release_dir }}.zip)
-
-            #### Disclaimer
-            This tool is intended for educational purposes and personal use. Please respect Discord's terms of service and game publishers' rights when using this application.  
-            
-            The creators and maintainers of this project are not liable for any damages, account suspensions, or other consequences that may arise from using this software. Use at your own risk. This project is not affiliated with, endorsed by, or connected to Discord in any way.
-          append_body: true
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           files: |
             ./build/${{ env.win_build_release_dir }}.zip
             ./build/discord-quest-completer-setup.exe
