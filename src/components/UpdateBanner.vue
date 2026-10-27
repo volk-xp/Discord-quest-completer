@@ -1,18 +1,30 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useUpdater } from '@/composables/use-updater';
 
 const { 
     updateAvailable, latestVersion, releaseNotes, releaseDate, 
-    checkForUpdate, dismissUpdate,
+    checkForUpdate, dismissUpdate, isChecking,
     isDownloading, downloadProgress, installError, installUpdate,
 } = useUpdater();
 const showChangelog = ref(false);
 
+let updateCheckInterval: ReturnType<typeof setInterval> | undefined;
+function checkWhenVisible() {
+    if (document.visibilityState === 'visible') void checkForUpdate();
+}
+
 onMounted(() => {
-    // Check once on launch. Silent failure is fine here — if the check errors
-    // (e.g. offline), we just don't show a banner rather than interrupting the user.
-    checkForUpdate();
+    void checkForUpdate();
+    updateCheckInterval = setInterval(checkForUpdate, 15 * 60 * 1000);
+    window.addEventListener('online', checkForUpdate);
+    document.addEventListener('visibilitychange', checkWhenVisible);
+});
+
+onUnmounted(() => {
+    clearInterval(updateCheckInterval);
+    window.removeEventListener('online', checkForUpdate);
+    document.removeEventListener('visibilitychange', checkWhenVisible);
 });
 
 function formatDate(dateStr: string | null) {
@@ -74,7 +86,7 @@ function formatDate(dateStr: string | null) {
                     class="font-display uppercase tracking-[0.14em] text-[10px] text-ink-dim hover:text-ink border border-line hover:border-ink-faint rounded-[6px] px-3.5 py-2 transition-colors">
                     Later
                 </button>
-                <button @click="installUpdate" :disabled="isDownloading"
+                <button @click="installUpdate" :disabled="isDownloading || isChecking"
                     class="bg-signal hover:bg-signal/85 disabled:opacity-60 disabled:cursor-not-allowed text-deck-950 font-display uppercase tracking-[0.14em] text-[10px] px-4 py-2 rounded-[6px] transition-colors">
                     {{ isDownloading ? 'Installing...' : 'Install & Restart' }}
                 </button>

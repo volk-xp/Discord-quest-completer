@@ -1,25 +1,13 @@
-# Release 25.10.8
+# Release 25.10.9
 
-## Safer game helpers
+## More reliable updates
 
-- Validate catalog metadata and enforce game-folder containment in Rust, including executable paths and reparse points.
-- Retain ownership of launched processes; Stop closes only helpers started by this app.
-- Enforce the local 16-minute deadline in the native session manager, independently of displayed rows and view lifetimes.
-- Clean up owned helpers on shutdown and unexpected parent termination.
-- Preserve active session associations when games are removed and added again.
+- Check for signed updates at startup, every 15 minutes, after reconnecting, and when returning to the app.
+- Add App updates to Settings with the installed version, a manual Check for updates button, and Install & restart.
+- Display check and installation errors instead of silently hiding failures.
+- Limit update-check requests to 15 seconds and prevent overlapping checks or installations.
+- Clear stale pending updates after a failed check.
 
-## Reliability and saved data
+Includes the process ownership, native auto-stop, path containment, saved-data recovery, catalog validation, and updater security fixes from 25.10.8.
 
-- Validate downloaded and bundled catalogs, limit response size, and fall back when a source fails.
-- Preserve recoverable favorites and validate stored history.
-- Reconcile Discord RPC connection status and cancellation with native state.
-- Bound activity logs, isolate editable game rows from catalog metadata, and support Unicode helper paths.
-
-## Updates and development
-
-- Update the updater dependency and disable downgrades.
-- Keep application, installer, tag, and update-manifest versions consistent.
-- Correct the updater repository URL and accept the original legacy release tag.
-- Add frontend and native regression coverage and reproducible Windows helper preparation.
-
-Local countdowns do not measure or confirm Discord quest completion. Check progress and requirements in Discord.
+Updates remain signed with the existing updater key. Older installations check for this release when reopened; installations with a broken updater may require a one-time manual installation. Local game timers do not measure Discord quest progress.

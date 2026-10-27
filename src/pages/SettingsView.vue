@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { useUserPrefs } from '@/composables/user-prefs';
 import { useHistory } from '@/composables/use-history';
+import { useUpdater } from '@/composables/use-updater';
+import { version } from '../../package.json';
+
+const { isChecking, hasChecked, checkError, updateAvailable, latestVersion, checkForUpdate,
+    isDownloading, downloadProgress, installError, installUpdate } = useUpdater();
 
 const { density, toggleDensity, notificationsEnabled, toggleNotifications, hasOnboarded, completeOnboarding } = useUserPrefs();
 const { history, clearHistory, formatRelativeTime } = useHistory();
@@ -13,6 +18,34 @@ function resetOnboarding() {
 <template>
     <div class="container mx-auto px-4 py-8 max-w-2xl">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
+
+        <div class="bg-white/85 dark:bg-slate-900/40 border border-transparent dark:border-cyan-900/40 rounded-lg p-5 mb-5">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-sm text-gray-900 dark:text-white">App updates</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Installed version {{ version }}</p>
+                </div>
+                <button @click="checkForUpdate" :disabled="isChecking || isDownloading"
+                    class="text-sm text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ isChecking ? 'Checking...' : 'Check for updates' }}
+                </button>
+            </div>
+            <p v-if="checkError" role="alert" class="text-xs text-red-500 mt-3">
+                Could not check for updates: {{ checkError }}. Check your connection and try again.
+            </p>
+            <p v-else-if="updateAvailable" role="status" class="text-xs text-gray-600 dark:text-gray-300 mt-3">
+                Version {{ latestVersion }} is available.
+            </p>
+            <p v-else-if="hasChecked && !isChecking" role="status" class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                You are up to date.
+            </p>
+            <button v-if="updateAvailable" @click="installUpdate" :disabled="isChecking || isDownloading"
+                class="mt-3 text-sm bg-cyan-600 hover:bg-cyan-500 text-white rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                {{ isDownloading ? 'Installing... ' + downloadProgress + '%' : 'Install & restart' }}
+            </button>
+            <p v-if="installError" role="alert" class="text-xs text-red-500 mt-3">Update failed: {{ installError }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Checks automatically every 15 minutes and when your connection returns.</p>
+        </div>
 
         <div class="bg-white/85 dark:bg-slate-900/40 backdrop-blur-md border border-transparent dark:border-cyan-900/40 rounded-lg p-5 mb-5">
             <div class="text-xs text-gray-500 dark:text-cyan-300/70 uppercase tracking-wide mb-3">General</div>

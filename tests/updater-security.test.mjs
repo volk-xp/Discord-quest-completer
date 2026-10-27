@@ -45,11 +45,13 @@ test('the frontend checks for updates without requesting a relaxed version polic
     assert.ok(checkSource.length, 'Expected the update-check function');
     const calls = [];
     const state = Object.fromEntries(['isChecking', 'checkError', 'updateAvailable', 'latestVersion',
-        'releaseNotes', 'releaseDate', 'pendingUpdate'].map(name => [name, { value: null }]));
+        'releaseNotes', 'releaseDate', 'pendingUpdate', 'hasChecked', 'isDownloading'].map(name => [name, { value: null }]));
     const context = vm.createContext({ ...state, check: async (...args) => { calls.push(args); return null; } });
     vm.runInContext(checkSource, context);
     await context.checkForUpdate();
-    assert.deepEqual(calls, [[]]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0].timeout, 15_000);
+    assert.deepEqual(Object.keys(calls[0][0]), ['timeout']);
     assert.equal(state.isChecking.value, false);
     assert.equal(state.updateAvailable.value, false);
 });

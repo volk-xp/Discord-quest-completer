@@ -3,6 +3,7 @@ import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
 const isChecking = ref(false);
+const hasChecked = ref(false);
 const updateAvailable = ref(false);
 const latestVersion = ref<string | null>(null);
 const releaseNotes = ref<string | null>(null);
@@ -18,10 +19,14 @@ const installError = ref<string | null>(null);
 const pendingUpdate = shallowRef<Update | null>(null);
 
 async function checkForUpdate() {
+    if (isChecking.value || isDownloading.value) return;
     isChecking.value = true;
     checkError.value = null;
     try {
-        const update = await check();
+        const previous = pendingUpdate.value;
+        pendingUpdate.value = null;
+        if (previous) await previous.close();
+        const update = await check({ timeout: 15_000 });
         if (update) {
             updateAvailable.value = true;
             latestVersion.value = update.version;
@@ -35,8 +40,13 @@ async function checkForUpdate() {
     } catch (err) {
         checkError.value = err instanceof Error ? err.message : String(err);
         updateAvailable.value = false;
+        pendingUpdate.value = null;
+        latestVersion.value = null;
+        releaseNotes.value = null;
+        releaseDate.value = null;
     } finally {
         isChecking.value = false;
+        hasChecked.value = true;
     }
 }
 
@@ -45,7 +55,7 @@ function dismissUpdate() {
 }
 
 async function installUpdate() {
-    if (!pendingUpdate.value) return;
+    if (!pendingUpdate.value || isDownloading.value || isChecking.value) return;
 
     isDownloading.value = true;
     downloadProgress.value = 0;
@@ -84,6 +94,7 @@ async function installUpdate() {
 export function useUpdater() {
     return {
         isChecking,
+        hasChecked,
         updateAvailable,
         latestVersion,
         releaseNotes,
